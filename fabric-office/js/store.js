@@ -1,38 +1,19 @@
-/* ========== تخزين البيانات ومنطق العمل ========== */
-const DB_KEY = 'fabricOffice.v1';
+/* ========== البيانات ومنطق العمل ========== */
+const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses'];
+const LOCAL_KEY = 'fabricOffice.v2';
+const LEGACY_KEY = 'fabricOffice.v1';
+
+function defaultSettings() {
+  return { shopName: 'مكتب القماش', phone: '', address: '', currency: 'ج.م', invoiceNote: 'شكراً لتعاملكم معنا' };
+}
 
 function defaultData() {
-  return {
-    settings: { shopName: 'مكتب القماش', phone: '', address: '', currency: 'ج.م', invoiceNote: 'شكراً لتعاملكم معنا' },
-    fabrics: [],
-    customers: [],
-    suppliers: [],
-    sales: [],
-    purchases: [],
-    payments: [],
-    expenses: [],
-    counters: { sale: 0, purchase: 0 },
-  };
+  const d = { settings: defaultSettings(), counters: { sale: 0, purchase: 0 } };
+  COLLECTIONS.forEach(c => { d[c] = []; });
+  return d;
 }
 
-function loadDB() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DB_KEY));
-    if (!raw) return defaultData();
-    const d = defaultData();
-    Object.keys(d).forEach(k => { if (raw[k] !== undefined) d[k] = raw[k]; });
-    d.settings = Object.assign(defaultData().settings, raw.settings || {});
-    return d;
-  } catch (e) {
-    return defaultData();
-  }
-}
-
-let db = loadDB();
-
-function saveDB() {
-  localStorage.setItem(DB_KEY, JSON.stringify(db));
-}
+let db = defaultData();
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
@@ -45,8 +26,183 @@ function todayISO() {
   return d.toISOString().slice(0, 10);
 }
 
+/* ---------- تحويل البيانات القديمة (نظام المتر) ---------- */
+function normalizeData(raw) {
+  const d = defaultData();
+  if (!raw || typeof raw !== 'object') return d;
+  d.settings = Object.assign(defaultSettings(), raw.settings || {});
+  d.counters = Object.assign({ sale: 0, purchase: 0 }, raw.counters || {});
+  COLLECTIONS.forEach(c => { if (Array.isArray(raw[c])) d[c] = raw[c]; });
+  const legacy = !Array.isArray(raw.bolts);
+  if (legacy) {
+    d.fabrics = d.fabrics.map(f => ({
+      id: f.id, code: f.code || '', name: f.name || '', type: f.type || '', color: f.color || '',
+      unit: f.unit === 'ياردة' ? 'ياردة' : 'متر', price: num(f.price), cost: num(f.cost),
+      minBolts: 2, supplierId: f.supplierId || '', notes: f.notes || '',
+    }));
+    const conv = l => ({ fabricId: l.fabricId, name: l.name, unit: 'متر', price: num(l.price), meters: num(l.qty), legacyCost: num(l.cost), bolts: [] });
+    d.sales = d.sales.map(s => Object.assign({}, s, { lines: (s.lines || []).map(conv) }));
+    d.purchases = d.purchases.map(s => Object.assign({}, s, { lines: (s.lines || []).map(conv) }));
+  }
+  return d;
+}
+
+function loadLocal() {
+  try {
+    const v2 = localStorage.getItem(LOCAL_KEY);
+    if (v2) return normalizeData(JSON.parse(v2));
+    const v1 = localStorage.getItem(LEGACY_KEY);
+    if (v1) return normalizeData(JSON.parse(v1));
+  } catch (e) { /* بيانات تالفة */ }
+  return defaultData();
+}
+
+function saveDB() { Backend.persist(); }
+
+/* ---------- حسابات السطور ---------- */
+const lineBoltCount = l => (l.bolts || []).length;
+const lineMeters = l => round2((l.bolts && l.bolts.length) ? l.bolts.reduce((a, b) => a + num(b.length), 0) : num(l.meters));
+const lineTotal = l => round2(lineMeters(l) * num(l.price));
+const lineCost = l => round2((l.bolts && l.bolts.length) ? l.bolts.reduce((a, b) => a + num(b.length) * num(b.cost), 0) : num(l.meters) * num(l.legacyCost));
+const invSubtotal = inv => round2(inv.lines.reduce((a, l) => a + lineTotal(l), 0));
+
+/* ---------- المخزن (التوبات) ---------- */
+function boltsInStock(fabricId) {
+  return db.bolts.filter(b => b.fabricId === fabricId && b.status === 'in')
+    .sort((a, b) => String(a.no).localeCompare(String(b.no), 'en', { numeric: true }));
+}
+
+function stockOf(fabricId) {
+  const list = boltsInStock(fabricId);
+  return { count: list.length, meters: round2(list.reduce((a, b) => a + num(b.length), 0)),
+    value: round2(list.reduce((a, b) => a + num(b.length) * num(b.cost), 0)) };
+}
+
+function nextBoltNo(fabricId, extra = []) {
+  let max = 0;
+  db.bolts.forEach(b => { if (b.fabricId === fabricId) max = Math.max(max, parseInt(b.no, 10) || 0); });
+  extra.forEach(n => { max = Math.max(max, parseInt(n, 10) || 0); });
+  return String(max + 1);
+}
+
+function boltNoTaken(fabricId, no, ignoreIds = new Set()) {
+  return db.bolts.some(b => b.fabricId === fabricId && b.status === 'in' && String(b.no) === String(no) && !ignoreIds.has(b.id));
+}
+
+function addOpeningBolts(fabricId, rows) {
+  const f = byId(db.fabrics, fabricId);
+  const seen = new Set();
+  for (const r of rows) {
+    if (!String(r.no).trim()) return 'اكتب رقم كل توب';
+    if (num(r.length) <= 0) return `طول التوب رقم ${r.no} غير صحيح`;
+    if (seen.has(String(r.no)) || boltNoTaken(fabricId, r.no)) return `رقم التوب ${r.no} موجود بالفعل في المخزن`;
+    seen.add(String(r.no));
+  }
+  rows.forEach(r => db.bolts.push({ id: uid(), fabricId, no: String(r.no).trim(), length: round2(r.length), cost: num(f.cost),
+    status: 'in', source: 'opening', purchaseId: '', saleId: '', addedAt: todayISO() }));
+  saveDB();
+  return null;
+}
+
+/* ---------- فواتير البيع ---------- */
+// data.lines: [{fabricId, price, boltIds:[...]}]
+function saveSale(data, existingId) {
+  const old = existingId ? byId(db.sales, existingId) : null;
+  const saleId = old ? old.id : uid();
+  const seen = new Set();
+  const lines = [];
+  for (const l of data.lines) {
+    const f = byId(db.fabrics, l.fabricId);
+    if (!f) return 'صنف غير موجود';
+    const bolts = [];
+    for (const bid of l.boltIds) {
+      const b = byId(db.bolts, bid);
+      if (!b) return 'فيه توب مش موجود في المخزن';
+      if (seen.has(bid)) return `التوب رقم ${b.no} مكرر في الفاتورة`;
+      if (b.status !== 'in' && b.saleId !== saleId) return `التوب رقم ${b.no} من "${f.name}" اتباع قبل كده`;
+      seen.add(bid);
+      bolts.push({ boltId: b.id, no: b.no, length: num(b.length), cost: num(b.cost) });
+    }
+    lines.push({ fabricId: f.id, name: f.name + (f.color ? ` - ${f.color}` : ''), unit: f.unit, price: round2(l.price), bolts });
+  }
+  if (old) db.bolts.forEach(b => { if (b.saleId === saleId) { b.status = 'in'; b.saleId = ''; } });
+  seen.forEach(bid => { const b = byId(db.bolts, bid); b.status = 'sold'; b.saleId = saleId; });
+
+  const rec = { date: data.date, customerId: data.customerId, lines, discount: data.discount, paid: data.paid, note: data.note };
+  rec.total = round2(invSubtotal(rec) - num(rec.discount));
+  if (rec.paid > rec.total) rec.paid = rec.total;
+  if (old) Object.assign(old, rec);
+  else {
+    db.counters.sale = (db.counters.sale || 0) + 1;
+    db.sales.push(Object.assign({ id: saleId, no: db.counters.sale, createdAt: Date.now(), createdBy: currentUser.name }, rec));
+  }
+  saveDB();
+  return null;
+}
+
+/* ---------- فواتير الشراء ---------- */
+// data.lines: [{fabricId, price, bolts:[{boltId?, no, length}]}]
+function purchaseHasSoldBolts(id) {
+  return db.bolts.some(b => b.purchaseId === id && b.status === 'sold');
+}
+
+function savePurchase(data, existingId) {
+  const old = existingId ? byId(db.purchases, existingId) : null;
+  if (old && purchaseHasSoldBolts(old.id)) return 'مينفعش تعدل فاتورة شراء اتباع منها توبات';
+  const pid = old ? old.id : uid();
+  const oldIds = new Set(db.bolts.filter(b => b.purchaseId === pid).map(b => b.id));
+  const lines = [];
+  for (const l of data.lines) {
+    const f = byId(db.fabrics, l.fabricId);
+    if (!f) return 'صنف غير موجود';
+    if (!l.bolts.length) return `ضيف توبات للصنف "${f.name}"`;
+    const seen = new Set();
+    for (const b of l.bolts) {
+      const no = String(b.no).trim();
+      if (!no) return `اكتب رقم كل توب في "${f.name}"`;
+      if (num(b.length) <= 0) return `طول التوب رقم ${no} في "${f.name}" غير صحيح`;
+      if (seen.has(no) || boltNoTaken(f.id, no, oldIds)) return `رقم التوب ${no} مكرر في "${f.name}"`;
+      seen.add(no);
+    }
+    lines.push({ f, price: round2(l.price), bolts: l.bolts });
+  }
+  db.bolts = db.bolts.filter(b => b.purchaseId !== pid);
+  const outLines = lines.map(({ f, price, bolts }) => {
+    f.cost = price;
+    return { fabricId: f.id, name: f.name + (f.color ? ` - ${f.color}` : ''), unit: f.unit, price,
+      bolts: bolts.map(b => {
+        const id = b.boltId || uid();
+        db.bolts.push({ id, fabricId: f.id, no: String(b.no).trim(), length: round2(b.length), cost: price,
+          status: 'in', source: 'purchase', purchaseId: pid, saleId: '', addedAt: data.date });
+        return { boltId: id, no: String(b.no).trim(), length: round2(b.length) };
+      }) };
+  });
+  const rec = { date: data.date, supplierId: data.supplierId, lines: outLines, discount: data.discount, paid: data.paid, note: data.note };
+  rec.total = round2(invSubtotal(rec) - num(rec.discount));
+  if (rec.paid > rec.total) rec.paid = rec.total;
+  if (old) Object.assign(old, rec);
+  else {
+    db.counters.purchase = (db.counters.purchase || 0) + 1;
+    db.purchases.push(Object.assign({ id: pid, no: db.counters.purchase, createdAt: Date.now(), createdBy: currentUser.name }, rec));
+  }
+  saveDB();
+  return null;
+}
+
+function deleteInvoice(kind, id) {
+  if (kind === 'sale') {
+    db.bolts.forEach(b => { if (b.saleId === id) { b.status = 'in'; b.saleId = ''; } });
+    db.sales = db.sales.filter(s => s.id !== id);
+  } else {
+    if (purchaseHasSoldBolts(id)) return 'مينفعش تحذف فاتورة شراء اتباع منها توبات. احذف فواتير البيع دي الأول.';
+    db.bolts = db.bolts.filter(b => b.purchaseId !== id);
+    db.purchases = db.purchases.filter(p => p.id !== id);
+  }
+  saveDB();
+  return null;
+}
+
 /* ---------- الأرصدة ---------- */
-// رصيد العميل الموجب = مستحق لنا عنده
 function customerBalance(id) {
   const c = byId(db.customers, id);
   let b = num(c && c.opening);
@@ -55,7 +211,6 @@ function customerBalance(id) {
   return round2(b);
 }
 
-// رصيد المورد الموجب = مستحق علينا له
 function supplierBalance(id) {
   const s = byId(db.suppliers, id);
   let b = num(s && s.opening);
@@ -71,7 +226,8 @@ function partyStatement(kind, id) {
   if (num(party.opening)) rows.push({ date: '', desc: 'رصيد افتتاحي', debit: num(party.opening), credit: 0 });
   (isC ? db.sales : db.purchases).forEach(inv => {
     if ((isC ? inv.customerId : inv.supplierId) !== id) return;
-    rows.push({ date: inv.date, desc: `${isC ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${inv.no}`, debit: inv.total, credit: 0 });
+    const bolts = inv.lines.reduce((a, l) => a + lineBoltCount(l), 0);
+    rows.push({ date: inv.date, desc: `${isC ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${inv.no}${bolts ? ` (${bolts} توب)` : ''}`, debit: inv.total, credit: 0 });
     if (inv.paid) rows.push({ date: inv.date, desc: `مدفوع مع الفاتورة رقم ${inv.no}`, debit: 0, credit: inv.paid });
   });
   db.payments.forEach(p => {
@@ -84,110 +240,58 @@ function partyStatement(kind, id) {
   return rows;
 }
 
-/* ---------- المخزن ---------- */
-// sign: -1 للبيع (خصم من المخزن)، +1 للشراء (إضافة للمخزن)
-function applyStock(lines, sign) {
-  lines.forEach(l => {
-    const f = byId(db.fabrics, l.fabricId);
-    if (f) f.qty = round2(num(f.qty) + sign * num(l.qty));
-  });
-}
-
-/* ---------- الفواتير ---------- */
-// kind: 'sale' | 'purchase'. يعيد رسالة خطأ أو null
-function saveInvoice(kind, data, existingId) {
-  const list = kind === 'sale' ? db.sales : db.purchases;
-  const sign = kind === 'sale' ? -1 : 1;
-  const old = existingId ? byId(list, existingId) : null;
-
-  if (old) applyStock(old.lines, -sign); // إلغاء أثر الفاتورة القديمة مؤقتاً
-
-  if (kind === 'sale') {
-    const need = {};
-    data.lines.forEach(l => { need[l.fabricId] = (need[l.fabricId] || 0) + num(l.qty); });
-    for (const fid of Object.keys(need)) {
-      const f = byId(db.fabrics, fid);
-      if (!f) continue;
-      if (need[fid] > num(f.qty) + 1e-9) {
-        if (old) applyStock(old.lines, sign);
-        return `الكمية المطلوبة من "${f.name}" (${need[fid]}) أكبر من المتاح بالمخزن (${num(f.qty)})`;
-      }
-    }
-  }
-
-  applyStock(data.lines, sign);
-
-  if (kind === 'purchase') {
-    // تحديث سعر الشراء بآخر سعر
-    data.lines.forEach(l => { const f = byId(db.fabrics, l.fabricId); if (f) f.cost = num(l.price); });
-  }
-
-  if (old) {
-    Object.assign(old, data);
-  } else {
-    db.counters[kind] = (db.counters[kind] || 0) + 1;
-    list.push(Object.assign({ id: uid(), no: db.counters[kind], createdAt: Date.now() }, data));
-  }
-  saveDB();
-  return null;
-}
-
-function deleteInvoice(kind, id) {
-  const list = kind === 'sale' ? db.sales : db.purchases;
-  const inv = byId(list, id);
-  if (!inv) return;
-  applyStock(inv.lines, kind === 'sale' ? 1 : -1);
-  list.splice(list.indexOf(inv), 1);
-  saveDB();
-}
-
 /* ---------- بيانات تجريبية ---------- */
 function seedDemo() {
-  db = defaultData();
-  const sup1 = { id: uid(), name: 'مصانع المحلة للغزل', phone: '01000000001', address: 'المحلة الكبرى', opening: 0 };
-  const sup2 = { id: uid(), name: 'شركة النيل للأقمشة', phone: '01000000002', address: 'شبرا الخيمة', opening: 0 };
+  const keepSettings = db.settings;
+  const fresh = defaultData();
+  fresh.settings = keepSettings;
+  Object.keys(fresh).forEach(k => { db[k] = fresh[k]; });
+  const sup1 = { id: uid(), name: 'مصانع المحلة للغزل', phone: '01000000001', address: 'المحلة الكبرى', opening: 0, notes: '' };
+  const sup2 = { id: uid(), name: 'شركة النيل للأقمشة', phone: '01000000002', address: 'شبرا الخيمة', opening: 0, notes: '' };
   db.suppliers.push(sup1, sup2);
   const cust = [
-    { id: uid(), name: 'أتيليه الأميرة', phone: '01100000001', address: 'وسط البلد', opening: 0 },
-    { id: uid(), name: 'ورشة الحاج محمود', phone: '01100000002', address: 'الموسكي', opening: 1500 },
-    { id: uid(), name: 'محل الشروق للملابس', phone: '01100000003', address: 'المنصورة', opening: 0 },
+    { id: uid(), name: 'أتيليه الأميرة', phone: '01100000001', address: 'وسط البلد', opening: 0, notes: '' },
+    { id: uid(), name: 'ورشة الحاج محمود', phone: '01100000002', address: 'الموسكي', opening: 15000, notes: '' },
+    { id: uid(), name: 'محل الشروق للملابس', phone: '01100000003', address: 'المنصورة', opening: 0, notes: '' },
   ];
   db.customers.push(...cust);
-  const fabrics = [
-    ['C-101', 'قطن مصري سادة', 'قطن', 'أبيض', 'متر', 0, 45, 65, 50, sup1.id],
-    ['C-102', 'قطن بوبلين', 'قطن', 'لبني', 'متر', 0, 55, 80, 40, sup1.id],
-    ['S-201', 'حرير طبيعي', 'حرير', 'بيج', 'متر', 0, 180, 260, 20, sup2.id],
-    ['CH-301', 'شيفون سادة', 'شيفون', 'أسود', 'متر', 0, 35, 55, 60, sup2.id],
-    ['L-401', 'كتان لينن', 'كتان', 'زيتي', 'متر', 0, 90, 130, 30, sup1.id],
-    ['J-501', 'جينز ثقيل', 'جينز', 'أزرق', 'متر', 0, 70, 100, 40, sup2.id],
-    ['ST-601', 'ستان لامع', 'ستان', 'نبيتي', 'متر', 0, 40, 60, 50, sup2.id],
-  ];
-  fabrics.forEach(([code, name, type, color, unit, qty, cost, price, min, supplierId]) =>
-    db.fabrics.push({ id: uid(), code, name, type, color, unit, qty, cost, price, minQty: min, supplierId, notes: '' }));
+  [
+    ['C-101', 'قطن مصري سادة', 'قطن', 'أبيض', 45, 60, 3, sup1.id],
+    ['C-102', 'قطن بوبلين', 'قطن', 'لبني', 55, 75, 3, sup1.id],
+    ['S-201', 'حرير طبيعي', 'حرير', 'بيج', 180, 240, 2, sup2.id],
+    ['CH-301', 'شيفون سادة', 'شيفون', 'أسود', 35, 50, 3, sup2.id],
+    ['L-401', 'كتان لينن', 'كتان', 'زيتي', 90, 125, 2, sup1.id],
+    ['J-501', 'جينز ثقيل', 'جينز', 'أزرق', 70, 95, 3, sup2.id],
+  ].forEach(([code, name, type, color, cost, price, minBolts, supplierId]) =>
+    db.fabrics.push({ id: uid(), code, name, type, color, unit: 'متر', price, cost, minBolts, supplierId, notes: '' }));
 
   const d = n => { const x = new Date(); x.setDate(x.getDate() - n); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
   const F = db.fabrics;
-  const mkLines = arr => arr.map(([f, q, p]) => ({ fabricId: f.id, name: f.name, unit: f.unit, qty: q, price: p, cost: f.cost }));
-  const tot = (lines, disc) => round2(lines.reduce((s, l) => s + l.qty * l.price, 0) - disc);
+  const mk = (start, lengths) => lengths.map((len, i) => ({ no: String(start + i), length: len }));
 
-  let L = mkLines([[F[0], 300, 45], [F[1], 200, 55], [F[4], 150, 90]]);
-  saveInvoice('purchase', { supplierId: sup1.id, date: d(20), lines: L, discount: 0, total: tot(L, 0), paid: 20000, note: '' });
-  L = mkLines([[F[2], 80, 180], [F[3], 250, 35], [F[5], 120, 70], [F[6], 200, 40]]);
-  saveInvoice('purchase', { supplierId: sup2.id, date: d(18), lines: L, discount: 400, total: tot(L, 400), paid: 30000, note: '' });
+  let L = [{ fabricId: F[0].id, price: 45, bolts: mk(101, [48, 50, 47, 52, 49, 50]) },
+    { fabricId: F[1].id, price: 55, bolts: mk(201, [45, 46, 50, 44, 48]) },
+    { fabricId: F[4].id, price: 90, bolts: mk(401, [40, 42, 41, 39]) }];
+  savePurchase({ supplierId: sup1.id, date: d(20), lines: L, discount: 0, paid: 30000, note: '' });
+  L = [{ fabricId: F[2].id, price: 180, bolts: mk(301, [30, 32, 31]) },
+    { fabricId: F[3].id, price: 35, bolts: mk(501, [60, 58, 62, 61, 59]) },
+    { fabricId: F[5].id, price: 70, bolts: mk(601, [50, 52, 49, 51, 50, 48])}];
+  savePurchase({ supplierId: sup2.id, date: d(18), lines: L, discount: 500, paid: 40000, note: '' });
 
+  const pick = (f, n) => boltsInStock(f.id).slice(0, n).map(b => b.id);
   const sale = (c, days, arr, disc, paidAll) => {
-    const lines = arr.map(([f, q]) => ({ fabricId: f.id, name: f.name, unit: f.unit, qty: q, price: f.price, cost: f.cost }));
-    const total = tot(lines, disc);
-    saveInvoice('sale', { customerId: c ? c.id : '', date: d(days), lines, discount: disc, total, paid: paidAll ? total : Math.round(total / 2), note: '' });
+    const lines = arr.map(([f, n]) => ({ fabricId: f.id, price: f.price, boltIds: pick(f, n) }));
+    const total = round2(lines.reduce((a, l) => a + l.price * l.boltIds.reduce((s, id) => s + byId(db.bolts, id).length, 0), 0) - disc);
+    saveSale({ customerId: c ? c.id : '', date: d(days), lines, discount: disc, paid: paidAll ? total : Math.round(total / 2), note: '' });
   };
-  sale(cust[0], 15, [[F[2], 12], [F[3], 30]], 0, false);
-  sale(cust[1], 10, [[F[0], 80], [F[1], 50]], 200, false);
-  sale(null, 6, [[F[6], 15]], 0, true);
-  sale(cust[2], 3, [[F[5], 60], [F[4], 25]], 0, true);
-  sale(cust[0], 1, [[F[2], 50], [F[3], 25]], 100, false);
-  sale(null, 0, [[F[0], 10], [F[3], 8]], 0, true);
+  sale(cust[0], 15, [[F[2], 1], [F[3], 2]], 0, false);
+  sale(cust[1], 10, [[F[0], 2], [F[1], 2]], 200, false);
+  sale(null, 6, [[F[5], 1]], 0, true);
+  sale(cust[2], 3, [[F[5], 2], [F[4], 1]], 0, true);
+  sale(cust[0], 1, [[F[2], 1], [F[3], 1]], 100, false);
+  sale(null, 0, [[F[0], 1]], 0, true);
 
-  db.payments.push({ id: uid(), party: 'customer', partyId: cust[1].id, date: d(5), amount: 2000, note: 'دفعة تحت الحساب' });
+  db.payments.push({ id: uid(), party: 'customer', partyId: cust[1].id, date: d(5), amount: 5000, note: 'دفعة تحت الحساب' });
   db.payments.push({ id: uid(), party: 'supplier', partyId: sup2.id, date: d(4), amount: 5000, note: '' });
   db.expenses.push({ id: uid(), date: d(12), category: 'إيجار', amount: 6000, note: 'إيجار المحل' });
   db.expenses.push({ id: uid(), date: d(2), category: 'نقل وشحن', amount: 450, note: '' });
