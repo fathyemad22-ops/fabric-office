@@ -91,3 +91,16 @@ function emptyState(text, actionHtml = '') {
 function statCard(label, value, cls = '') {
   return `<div class="stat ${cls}"><span class="stat-label">${esc(label)}</span><span class="stat-value">${value}</span></div>`;
 }
+
+/* ---------- واتساب ---------- */
+function waPhone(phone) {
+  let p = String(phone || '').replace(/\D/g, '');
+  if (p.startsWith('00')) p = p.slice(2);
+  if (p.length === 11 && p.startsWith('01')) p = '2' + p; // رقم مصري
+  return p;
+}
+
+function openWhatsApp(phone, text) {
+  const p = waPhone(phone);
+  window.open(`https://wa.me/${p}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
