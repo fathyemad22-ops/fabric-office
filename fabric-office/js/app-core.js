@@ -4,16 +4,16 @@ const UNITS = ['متر', 'ياردة'];
 const EXPENSE_CATS = ['إيجار', 'مرتبات', 'كهرباء ومياه', 'نقل وشحن', 'صيانة', 'نثريات'];
 
 const routes = {
-  dashboard: { title: 'الرئيسية', render: renderDashboard, allow: () => true },
-  fabrics: { title: 'الأقمشة والتوبات', render: renderFabrics, allow: () => true },
+  dashboard: { title: 'الرئيسية', render: v => renderDashboard(v), allow: () => true },
+  fabrics: { title: 'الأقمشة والتوبات', render: v => renderFabrics(v), allow: () => true },
   sales: { title: 'فواتير البيع', render: () => renderInvoices('sale'), allow: () => true },
   purchases: { title: 'فواتير الشراء', render: () => renderInvoices('purchase'), allow: () => can('purchases') },
   customers: { title: 'العملاء', render: () => renderParties('customer'), allow: () => true },
   suppliers: { title: 'الموردين', render: () => renderParties('supplier'), allow: () => can('purchases') || can('parties') },
-  payments: { title: 'التحصيل والسداد', render: renderPayments, allow: () => can('payments') },
-  expenses: { title: 'المصروفات', render: renderExpenses, allow: () => can('expenses') },
-  reports: { title: 'التقارير', render: renderReports, allow: () => can('reports') },
-  settings: { title: 'الإعدادات', render: renderSettings, allow: () => isOwner() },
+  payments: { title: 'التحصيل والسداد', render: v => renderPayments(v), allow: () => can('payments') },
+  expenses: { title: 'المصروفات', render: v => renderExpenses(v), allow: () => can('expenses') },
+  reports: { title: 'التقارير', render: v => renderReports(v), allow: () => can('reports') },
+  settings: { title: 'الإعدادات', render: v => renderSettings(v), allow: () => isOwner() },
 };
 
 function currentRoute() {
@@ -161,7 +161,8 @@ function showLogin(message = '') {
     'auth/weak-password': 'كلمة السر ضعيفة — لازم 6 حروف على الأقل',
     'auth/network-request-failed': 'مفيش اتصال بالإنترنت',
     'auth/too-many-requests': 'محاولات كتير — استنى شوية وجرب تاني',
-  }[e.code] || (e.message === 'owner-exists' ? 'حساب صاحب المكتب اتعمل قبل كده. اطلب منه يعملك حساب.' : 'حصلت مشكلة، جرب تاني'));
+    'auth/operation-not-allowed': 'لازم تفعّل الدخول بـ Email/Password من Firebase (الخطوة 3 في دليل التشغيل)',
+  }[e.code] || (String(e.code).includes('api-key') ? 'بيانات الربط بـ Firebase غلط — راجع firebaseConfig' : '') || (e.message === 'owner-exists' ? 'حساب صاحب المكتب اتعمل قبل كده. اطلب منه يعملك حساب.' : 'حصلت مشكلة، جرب تاني'));
 
   $('#loginForm').onsubmit = async e => {
     e.preventDefault();
