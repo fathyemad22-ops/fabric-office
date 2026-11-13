@@ -1,0 +1,11 @@
+{
+  "name": "نظام مكتب القماش",
+  "short_name": "مكتب القماش",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f6f4f1",
+  "theme_color": "#7a2e4a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
