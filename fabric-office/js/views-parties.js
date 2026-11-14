@@ -54,7 +54,7 @@ function drawPartyList(kind) {
     if (t.dataset.del) {
       const p = byId(all, t.dataset.del);
       const used = (isC ? db.sales.some(s => s.customerId === p.id) : db.purchases.some(s => s.supplierId === p.id)) ||
-        db.payments.some(x => x.party === kind && x.partyId === p.id);
+        db.payments.some(x => x.party === kind && x.partyId === p.id) || db.adjustments.some(x => x.party === kind && x.partyId === p.id);
       if (used) return toast(`لا يمكن حذف ${isC ? 'عميل' : 'مورد'} له حركات مسجلة`, 'error');
       if (await confirmDialog(`حذف "${p.name}"؟`)) {
         db[isC ? 'customers' : 'suppliers'] = all.filter(x => x.id !== p.id); saveDB(); toast('تم الحذف'); render();
@@ -94,23 +94,33 @@ function openStatement(kind, id) {
   const p = byId(partyList(kind), id);
   const rows = partyStatement(kind, id);
   const bal = isC ? customerBalance(id) : supplierBalance(id);
-  const table = rows.length ? `<table class="table compact p-table">
-    <thead><tr><th>التاريخ</th><th>البيان</th><th>${isC ? 'عليه' : 'له'}</th><th>${isC ? 'دفع' : 'دفعنا'}</th><th>الرصيد</th></tr></thead>
-    <tbody>${rows.map(r => `<tr><td>${fmtDate(r.date)}</td><td>${esc(r.desc)}</td><td>${r.debit ? fmt(r.debit) : ''}</td><td>${r.credit ? fmt(r.credit) : ''}</td><td><b>${fmt(r.balance)}</b></td></tr>`).join('')}</tbody>
+  const bs = balanceSide(kind, bal);
+  const totDebit = rows.reduce((a, r) => a + r.debit, 0);
+  const totCredit = rows.reduce((a, r) => a + r.credit, 0);
+  const sideCell = sd => sd.side ? `${fmt(sd.amount)} <small class="side ${sd.side}">${SIDE_LABEL[sd.side]}</small>` : '<small class="muted">خالص</small>';
+  const table = rows.length ? `<table class="table compact p-table stmt-table">
+    <thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${fmtDate(r.date)}</td><td>${esc(r.desc)}</td><td class="num-debit">${r.debit ? fmt(r.debit) : ''}</td><td class="num-credit">${r.credit ? fmt(r.credit) : ''}</td><td><b>${sideCell(r.side)}</b></td></tr>`).join('')}</tbody>
+    <tfoot><tr><td></td><td><b>الإجمالي</b></td><td class="num-debit"><b>${fmt(totDebit)}</b></td><td class="num-credit"><b>${fmt(totCredit)}</b></td><td><b>${sideCell(bs)}</b></td></tr></tfoot>
   </table>` : emptyState('لا توجد حركات');
-  const summary = `<p class="stmt-total">الرصيد الحالي: <b>${money(bal)}</b> ${bal > 0 ? (isC ? '(مستحق على العميل)' : '(مستحق للمورد)') : ''}</p>`;
+  const meaning = !bs.side ? '' : (isC ? (bs.side === 'debit' ? '(العميل مدين لنا بالمبلغ ده)' : '(العميل دائن — ليه فلوس عندنا)') : (bs.side === 'credit' ? '(المورد دائن — ليه فلوس عندنا)' : '(المورد مدين لنا بالمبلغ ده)'));
+  const summary = `<p class="stmt-total">الرصيد الحالي: <b>${bs.side ? `${money(bs.amount)} ${SIDE_LABEL[bs.side]}` : 'خالص'}</b> <span class="muted">${meaning}</span></p>`;
   openModal(`كشف حساب: ${p.name}`, `${table}${summary}
     <div class="form-actions">
       <button class="btn btn-primary" id="stmtPrint">طباعة</button>
       <button class="btn btn-wa" id="stmtWa">إرسال الرصيد واتساب</button>
+      ${can('payments') ? '<button class="btn" id="stmtAdj">+ قيد مدين / دائن</button>' : ''}
       <button class="btn" data-close>إغلاق</button>
     </div>`, { wide: true });
+  if ($('#stmtAdj')) $('#stmtAdj').onclick = () => openAdjustmentForm(null, { party: kind, partyId: id, back: () => openStatement(kind, id) });
   $('#stmtPrint').onclick = () => printHtml(`${printHeader(`<h2>كشف حساب</h2><p>${fmtDate(todayISO())}</p>`)}<p class="p-party">${isC ? 'العميل' : 'المورد'}: <b>${esc(p.name)}</b></p>${table}${summary}`);
   $('#stmtWa').onclick = () => {
     const cur = db.settings.currency;
-    const last = rows.slice(-8).map(r => `${fmtDate(r.date)} | ${r.desc} | ${r.debit ? '+' + fmt(r.debit) : '-' + fmt(r.credit)}`);
+    const last = rows.slice(-8).map(r => `${fmtDate(r.date)} | ${r.desc} | ${r.debit ? 'مدين ' + fmt(r.debit) : 'دائن ' + fmt(r.credit)}`);
     const text = [`*${db.settings.shopName}*`, `كشف حساب: ${p.name}`, '', ...(last.length ? ['آخر الحركات:', ...last, ''] : []),
-      `*الرصيد الحالي: ${fmt(bal)} ${cur}*`, isC && bal > 0 ? 'برجاء التكرم بسداد المستحق. شكراً لحضرتك 🌹' : ''].filter(x => x !== '').join('\n');
+      `إجمالي المدين: ${fmt(totDebit)} ${cur}`, `إجمالي الدائن: ${fmt(totCredit)} ${cur}`,
+      `*الرصيد: ${bs.side ? `${fmt(bs.amount)} ${cur} ${SIDE_LABEL[bs.side]}` : 'خالص'}*`,
+      isC && bal > 0 ? 'برجاء التكرم بسداد المستحق. شكراً لحضرتك 🌹' : ''].filter(x => x !== '').join('\n');
     if (!p.phone) toast('مفيش رقم تليفون مسجل — اختار الرقم من واتساب', 'error');
     openWhatsApp(p.phone, text);
   };

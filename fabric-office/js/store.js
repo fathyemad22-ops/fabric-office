@@ -1,5 +1,5 @@
 /* ========== البيانات ومنطق العمل ========== */
-const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses'];
+const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses', 'adjustments'];
 const LOCAL_KEY = 'fabricOffice.v2';
 const LEGACY_KEY = 'fabricOffice.v1';
 
@@ -202,12 +202,22 @@ function deleteInvoice(kind, id) {
   return null;
 }
 
-/* ---------- الأرصدة ---------- */
+/* ---------- الأرصدة ----------
+   حساب العميل: المدين يزود اللي عليه، والدائن يقلله. الرصيد الموجب = مدين (عليه فلوس لينا).
+   حساب المورد: الدائن يزود اللي علينا له، والمدين يقلله. الرصيد الموجب = دائن (ليه فلوس عندنا).
+   القيود اليدوية (adjustments): type = 'debit' | 'credit' على حساب الطرف نفسه. */
+function adjustmentEffect(a, kind) {
+  // بيرجع أثر القيد على "الرصيد المستحق": موجب يزوده، سالب يقلله
+  const sign = kind === 'customer' ? (a.type === 'debit' ? 1 : -1) : (a.type === 'credit' ? 1 : -1);
+  return sign * num(a.amount);
+}
+
 function customerBalance(id) {
   const c = byId(db.customers, id);
   let b = num(c && c.opening);
   db.sales.forEach(s => { if (s.customerId === id) b += s.total - s.paid; });
   db.payments.forEach(p => { if (p.party === 'customer' && p.partyId === id) b -= p.amount; });
+  db.adjustments.forEach(a => { if (a.party === 'customer' && a.partyId === id) b += adjustmentEffect(a, 'customer'); });
   return round2(b);
 }
 
@@ -216,28 +226,61 @@ function supplierBalance(id) {
   let b = num(s && s.opening);
   db.purchases.forEach(p => { if (p.supplierId === id) b += p.total - p.paid; });
   db.payments.forEach(p => { if (p.party === 'supplier' && p.partyId === id) b -= p.amount; });
+  db.adjustments.forEach(a => { if (a.party === 'supplier' && a.partyId === id) b += adjustmentEffect(a, 'supplier'); });
   return round2(b);
 }
 
+/* رصيد الطرف بالمعنى المحاسبي: { amount, side: 'debit' | 'credit' | '' } */
+function balanceSide(kind, bal) {
+  if (!bal) return { amount: 0, side: '' };
+  const positiveSide = kind === 'customer' ? 'debit' : 'credit';
+  const other = positiveSide === 'debit' ? 'credit' : 'debit';
+  return { amount: Math.abs(bal), side: bal > 0 ? positiveSide : other };
+}
+const SIDE_LABEL = { debit: 'مدين', credit: 'دائن', '': 'خالص' };
+
+/* كشف حساب بالشكل المحاسبي: مدين | دائن | الرصيد */
 function partyStatement(kind, id) {
   const isC = kind === 'customer';
   const party = byId(isC ? db.customers : db.suppliers, id);
   const rows = [];
-  if (num(party.opening)) rows.push({ date: '', desc: 'رصيد افتتاحي', debit: num(party.opening), credit: 0 });
+  // inc = بيزود المستحق، dec = بيقلله
+  const push = (date, desc, inc, dec, extra = {}) => rows.push(Object.assign({ date, desc, inc, dec }, extra));
+  const op = num(party.opening);
+  if (op) push('', 'رصيد افتتاحي', Math.max(op, 0), Math.max(-op, 0));
   (isC ? db.sales : db.purchases).forEach(inv => {
     if ((isC ? inv.customerId : inv.supplierId) !== id) return;
     const bolts = inv.lines.reduce((a, l) => a + lineBoltCount(l), 0);
-    rows.push({ date: inv.date, desc: `${isC ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${inv.no}${bolts ? ` (${bolts} توب)` : ''}`, debit: inv.total, credit: 0 });
-    if (inv.paid) rows.push({ date: inv.date, desc: `مدفوع مع الفاتورة رقم ${inv.no}`, debit: 0, credit: inv.paid });
+    push(inv.date, `${isC ? 'فاتورة بيع' : 'فاتورة شراء'} رقم ${inv.no}${bolts ? ` (${bolts} توب)` : ''}`, inv.total, 0);
+    if (inv.paid) push(inv.date, `مدفوع مع الفاتورة رقم ${inv.no}`, 0, inv.paid);
   });
   db.payments.forEach(p => {
     if (p.party !== kind || p.partyId !== id) return;
-    rows.push({ date: p.date, desc: (isC ? 'تحصيل نقدي' : 'سداد نقدي') + (p.note ? ` - ${p.note}` : ''), debit: 0, credit: p.amount });
+    push(p.date, (isC ? 'تحصيل نقدي' : 'سداد نقدي') + (p.note ? ` - ${p.note}` : ''), 0, p.amount);
+  });
+  db.adjustments.forEach(a => {
+    if (a.party !== kind || a.partyId !== id) return;
+    const e = adjustmentEffect(a, kind);
+    push(a.date, `قيد ${a.type === 'debit' ? 'مدين' : 'دائن'}${a.note ? ` - ${a.note}` : ''}`, Math.max(e, 0), Math.max(-e, 0), { adjustmentId: a.id });
   });
   rows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let bal = 0;
-  rows.forEach(r => { bal = round2(bal + r.debit - r.credit); r.balance = bal; });
+  rows.forEach(r => {
+    bal = round2(bal + r.inc - r.dec);
+    r.debit = isC ? r.inc : r.dec;
+    r.credit = isC ? r.dec : r.inc;
+    r.balance = bal;
+    r.side = balanceSide(kind, bal);
+  });
   return rows;
+}
+
+function saveAdjustment(data, id) {
+  const rec = { party: data.party, partyId: data.partyId, date: data.date, type: data.type, amount: round2(data.amount), note: data.note };
+  const cur = id ? byId(db.adjustments, id) : null;
+  if (cur) Object.assign(cur, rec);
+  else db.adjustments.push(Object.assign({ id: uid(), createdBy: currentUser.name, createdAt: Date.now() }, rec));
+  saveDB();
 }
 
 /* ---------- بيانات تجريبية ---------- */
@@ -295,5 +338,7 @@ function seedDemo() {
   db.payments.push({ id: uid(), party: 'supplier', partyId: sup2.id, date: d(4), amount: 5000, note: '' });
   db.expenses.push({ id: uid(), date: d(12), category: 'إيجار', amount: 6000, note: 'إيجار المحل' });
   db.expenses.push({ id: uid(), date: d(2), category: 'نقل وشحن', amount: 450, note: '' });
+  db.adjustments.push({ id: uid(), party: 'customer', partyId: cust[0].id, date: d(7), type: 'credit', amount: 500, note: 'خصم على عيب في توب' });
+  db.adjustments.push({ id: uid(), party: 'supplier', partyId: sup1.id, date: d(8), type: 'debit', amount: 300, note: 'مصاريف نقل دفعناها على حساب المورد' });
   saveDB();
 }

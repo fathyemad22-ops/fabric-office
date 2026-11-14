@@ -339,3 +339,19 @@ body.auth-mode .sidebar, body.auth-mode .main { display: none; }
   .inv-line-head .field:not(.grow) { flex: 1 1 120px; }
   .compact-stats { grid-template-columns: 1fr 1fr 1fr; }
 }
+
+/* ===== مدين ودائن ===== */
+.side { font-weight: 700; }
+.side.debit { color: var(--accent); }
+.side.credit { color: var(--warn); }
+.stmt-table td.num-debit, .stmt-table td.num-credit { white-space: nowrap; }
+.stmt-table tfoot td { border-top: 2px solid var(--border); background: #faf8f6; }
+.side-pick { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.side-pick legend { font-weight: 700; padding: 0 6px; font-size: 13px; }
+.side-pick p { flex-basis: 100%; margin: 4px 0 0; }
+.side-opt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-weight: 700; min-height: 40px; }
+.side-opt.debit:has(input:checked) { background: #e3f2ec; border-color: var(--accent); color: var(--accent); }
+.side-opt.credit:has(input:checked) { background: #fdf0dc; border-color: var(--warn); color: var(--warn); }
+.balance-preview { background: #faf8f6; border-radius: 8px; padding: 8px 12px; margin: 0; }
+.balance-preview:empty { display: none; }
+@media print { .stmt-table tfoot td { font-weight: 700; background: #eee; } }

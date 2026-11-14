@@ -66,6 +66,11 @@ service cloud.firestore {
       allow create: if can('payments');
       allow update, delete: if can('edit');
     }
+    match /adjustments/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if can('edit');
+    }
     match /expenses/{id} {
       allow read: if active();
       allow create: if can('expenses');

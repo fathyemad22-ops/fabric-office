@@ -10,6 +10,7 @@ const routes = {
   purchases: { title: 'فواتير الشراء', render: () => renderInvoices('purchase'), allow: () => can('purchases') },
   customers: { title: 'العملاء', render: () => renderParties('customer'), allow: () => true },
   suppliers: { title: 'الموردين', render: () => renderParties('supplier'), allow: () => can('purchases') || can('parties') },
+  ledger: { title: 'الدائنون والمدينون', render: v => renderLedger(v), allow: () => true },
   payments: { title: 'التحصيل والسداد', render: v => renderPayments(v), allow: () => can('payments') },
   expenses: { title: 'المصروفات', render: v => renderExpenses(v), allow: () => can('expenses') },
   reports: { title: 'التقارير', render: v => renderReports(v), allow: () => can('reports') },
