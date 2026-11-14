@@ -1,14 +1,21 @@
 /* ========== البيانات ومنطق العمل ========== */
-const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses', 'adjustments'];
+const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses', 'adjustments', 'returns', 'transfers', 'closings', 'stocktakes'];
 const LOCAL_KEY = 'fabricOffice.v2';
 const LEGACY_KEY = 'fabricOffice.v1';
 
 function defaultSettings() {
-  return { shopName: 'مكتب القماش', phone: '', address: '', currency: 'ج.م', invoiceNote: 'شكراً لتعاملكم معنا' };
+  return {
+    shopName: 'مكتب القماش', phone: '', address: '', currency: 'ج.م', invoiceNote: 'شكراً لتعاملكم معنا',
+    // سياسة الآجل
+    creditLimit: 50000, minDownPct: 50, weeklyInstallment: 10000,
+    // أماكن الفلوس
+    accounts: [{ id: 'cash', name: 'الكاش' }, { id: 'vf', name: 'فودافون كاش' }],
+    accountOpening: {},
+  };
 }
 
 function defaultData() {
-  const d = { settings: defaultSettings(), counters: { sale: 0, purchase: 0 } };
+  const d = { settings: defaultSettings(), counters: { sale: 0, purchase: 0, return: 0 } };
   COLLECTIONS.forEach(c => { d[c] = []; });
   return d;
 }
@@ -31,7 +38,8 @@ function normalizeData(raw) {
   const d = defaultData();
   if (!raw || typeof raw !== 'object') return d;
   d.settings = Object.assign(defaultSettings(), raw.settings || {});
-  d.counters = Object.assign({ sale: 0, purchase: 0 }, raw.counters || {});
+  d.counters = Object.assign({ sale: 0, purchase: 0, return: 0 }, raw.counters || {});
+  if (!Array.isArray(d.settings.accounts) || !d.settings.accounts.length) d.settings.accounts = defaultSettings().accounts;
   COLLECTIONS.forEach(c => { if (Array.isArray(raw[c])) d[c] = raw[c]; });
   const legacy = !Array.isArray(raw.bolts);
   if (legacy) {
@@ -128,7 +136,7 @@ function saveSale(data, existingId) {
   if (old) db.bolts.forEach(b => { if (b.saleId === saleId) { b.status = 'in'; b.saleId = ''; } });
   seen.forEach(bid => { const b = byId(db.bolts, bid); b.status = 'sold'; b.saleId = saleId; });
 
-  const rec = { date: data.date, customerId: data.customerId, lines, discount: data.discount, paid: data.paid, note: data.note };
+  const rec = { date: data.date, customerId: data.customerId, lines, discount: data.discount, paid: data.paid, paidAccount: data.paidAccount || 'cash', note: data.note };
   rec.total = round2(invSubtotal(rec) - num(rec.discount));
   if (rec.paid > rec.total) rec.paid = rec.total;
   if (old) Object.assign(old, rec);
@@ -143,7 +151,7 @@ function saveSale(data, existingId) {
 /* ---------- فواتير الشراء ---------- */
 // data.lines: [{fabricId, price, bolts:[{boltId?, no, length}]}]
 function purchaseHasSoldBolts(id) {
-  return db.bolts.some(b => b.purchaseId === id && b.status === 'sold');
+  return db.bolts.some(b => b.purchaseId === id && b.status !== 'in');
 }
 
 function savePurchase(data, existingId) {
@@ -167,17 +175,23 @@ function savePurchase(data, existingId) {
     lines.push({ f, price: round2(l.price), bolts: l.bolts });
   }
   db.bolts = db.bolts.filter(b => b.purchaseId !== pid);
+  // مصاريف النقل بتتوزع على الأمتار عشان تكلفة المتر تبقى حقيقية
+  const transport = round2(data.transport);
+  const allMeters = lines.reduce((a, l) => a + l.bolts.reduce((x, b) => x + num(b.length), 0), 0);
+  const extra = allMeters > 0 ? transport / allMeters : 0;
   const outLines = lines.map(({ f, price, bolts }) => {
-    f.cost = price;
+    const landed = round2(price + extra);
+    f.cost = landed;
     return { fabricId: f.id, name: f.name + (f.color ? ` - ${f.color}` : ''), unit: f.unit, price,
       bolts: bolts.map(b => {
         const id = b.boltId || uid();
-        db.bolts.push({ id, fabricId: f.id, no: String(b.no).trim(), length: round2(b.length), cost: price,
+        db.bolts.push({ id, fabricId: f.id, no: String(b.no).trim(), length: round2(b.length), cost: landed,
           status: 'in', source: 'purchase', purchaseId: pid, saleId: '', addedAt: data.date });
         return { boltId: id, no: String(b.no).trim(), length: round2(b.length) };
       }) };
   });
-  const rec = { date: data.date, supplierId: data.supplierId, lines: outLines, discount: data.discount, paid: data.paid, note: data.note };
+  const rec = { date: data.date, supplierId: data.supplierId, lines: outLines, discount: data.discount, paid: data.paid, paidAccount: data.paidAccount || 'cash',
+    transport, transportAccount: data.transportAccount || 'cash', note: data.note };
   rec.total = round2(invSubtotal(rec) - num(rec.discount));
   if (rec.paid > rec.total) rec.paid = rec.total;
   if (old) Object.assign(old, rec);
@@ -191,6 +205,7 @@ function savePurchase(data, existingId) {
 
 function deleteInvoice(kind, id) {
   if (kind === 'sale') {
+    if (saleHasReturns(id)) return 'الفاتورة دي ليها مرتجع. احذف المرتجع الأول.';
     db.bolts.forEach(b => { if (b.saleId === id) { b.status = 'in'; b.saleId = ''; } });
     db.sales = db.sales.filter(s => s.id !== id);
   } else {
@@ -218,6 +233,7 @@ function customerBalance(id) {
   db.sales.forEach(s => { if (s.customerId === id) b += s.total - s.paid; });
   db.payments.forEach(p => { if (p.party === 'customer' && p.partyId === id) b -= p.amount; });
   db.adjustments.forEach(a => { if (a.party === 'customer' && a.partyId === id) b += adjustmentEffect(a, 'customer'); });
+  db.returns.forEach(r => { if (r.kind === 'sale' && r.partyId === id) b += num(r.refund) - r.total; });
   return round2(b);
 }
 
@@ -227,6 +243,7 @@ function supplierBalance(id) {
   db.purchases.forEach(p => { if (p.supplierId === id) b += p.total - p.paid; });
   db.payments.forEach(p => { if (p.party === 'supplier' && p.partyId === id) b -= p.amount; });
   db.adjustments.forEach(a => { if (a.party === 'supplier' && a.partyId === id) b += adjustmentEffect(a, 'supplier'); });
+  db.returns.forEach(r => { if (r.kind === 'purchase' && r.partyId === id) b += num(r.refund) - r.total; });
   return round2(b);
 }
 
@@ -262,6 +279,12 @@ function partyStatement(kind, id) {
     if (a.party !== kind || a.partyId !== id) return;
     const e = adjustmentEffect(a, kind);
     push(a.date, `قيد ${a.type === 'debit' ? 'مدين' : 'دائن'}${a.note ? ` - ${a.note}` : ''}`, Math.max(e, 0), Math.max(-e, 0), { adjustmentId: a.id });
+  });
+  db.returns.forEach(r => {
+    if (r.kind !== (isC ? 'sale' : 'purchase') || r.partyId !== id) return;
+    const n = r.lines.reduce((a, l) => a + lineBoltCount(l), 0);
+    push(r.date, `مرتجع رقم ${r.no} (${n} توب)`, 0, r.total);
+    if (num(r.refund)) push(r.date, isC ? `فلوس رجعناها مع المرتجع رقم ${r.no}` : `فلوس رجعها المورد مع المرتجع رقم ${r.no}`, num(r.refund), 0);
   });
   rows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let bal = 0;
