@@ -105,19 +105,35 @@ function validateTotals(disc, total, paid) {
 }
 
 /* =====================================================
-   فاتورة بيع (اختيار التوبات)
+   فاتورة بيع: بتكتب عدد التوب والسيستم بيختار لوحده
    ===================================================== */
+function stepperHtml(value, max, label = 'عدد التوب') {
+  return `<div class="field qty-field"><span>${label}</span>
+    <div class="stepper">
+      <button type="button" class="step-btn" data-step="-1" aria-label="أقل">−</button>
+      <input type="number" data-k="count" min="0" ${max !== undefined ? `max="${max}"` : ''} step="1" value="${value}" inputmode="numeric" aria-label="${label}">
+      <button type="button" class="step-btn" data-step="1" aria-label="أكتر">+</button>
+    </div></div>`;
+}
+
+const boltNosPreview = nos => {
+  const shown = nos.slice(0, 6).map(n => '#' + esc(n)).join('، ');
+  return nos.length > 6 ? `${shown} و${nos.length - 6} كمان` : shown;
+};
+
 function openSaleForm(id) {
   if (!id && !can('sales')) return;
   if (!db.bolts.some(b => b.status === 'in') && !id) { toast('مفيش توبات في المخزن. سجل التوبات الأول.', 'error'); return; }
   const inv = id ? byId(db.sales, id) : null;
   const saleId = inv ? inv.id : null;
-  const lines = inv ? inv.lines.filter(l => l.bolts && l.bolts.length).map(l => ({ fabricId: l.fabricId, price: l.price, boltIds: new Set(l.bolts.map(b => b.boltId)) }))
-    : [{ fabricId: '', price: '', boltIds: new Set() }];
-  if (!lines.length) lines.push({ fabricId: '', price: '', boltIds: new Set() });
+  // boltIds: مصفوفة بالترتيب عشان لما العدد يقل نشيل آخر توب اتضاف
+  const newLine = () => ({ fabricId: '', price: '', boltIds: [], open: false });
+  const lines = inv ? inv.lines.filter(l => l.bolts && l.bolts.length).map(l => ({ fabricId: l.fabricId, price: l.price, boltIds: l.bolts.map(b => b.boltId), open: false })) : [newLine()];
+  if (!lines.length) lines.push(newLine());
   const parties = db.customers.map(p => ({ value: p.id, label: p.name }));
+  // الأقدم في المخزن يتباع الأول
   const available = fid => db.bolts.filter(b => b.fabricId === fid && (b.status === 'in' || (saleId && b.saleId === saleId)))
-    .sort((a, b) => String(a.no).localeCompare(String(b.no), 'en', { numeric: true }));
+    .sort((a, b) => String(a.addedAt || '').localeCompare(String(b.addedAt || '')) || String(a.no).localeCompare(String(b.no), 'en', { numeric: true }));
   const fabricsWithStock = () => db.fabrics.filter(f => available(f.id).length);
 
   openModal(id ? `تعديل فاتورة بيع رقم ${inv.no}` : 'فاتورة بيع جديدة', `
@@ -125,13 +141,14 @@ function openSaleForm(id) {
       <div class="form-grid">
         ${selectField('العميل', 'party', parties, inv ? inv.customerId : '', { placeholder: 'عميل نقدي (بدون حساب)' })}
         ${field('التاريخ', 'date', inv ? inv.date : todayISO(), { type: 'date', required: true })}
-        <label class="field"><span>إضافة سريعة برقم التوب</span>
-          <input id="boltQuick" placeholder="اكتب رقم التوب واضغط Enter" autocomplete="off" inputmode="numeric">
-        </label>
+      </div>
+      <div id="saleLines"></div>
+      <div class="row-actions between">
+        <button type="button" class="btn btn-sm" id="addLine">+ صنف تاني</button>
+        <label class="quick-inline"><span class="muted small">أو ضيف توب برقمه:</span>
+          <input id="boltQuick" placeholder="رقم التوب" autocomplete="off" inputmode="numeric" aria-label="إضافة توب برقمه"></label>
       </div>
       <div id="quickChoices" class="quick-choices"></div>
-      <div id="saleLines"></div>
-      <button type="button" class="btn btn-sm" id="addLine">+ صنف تاني</button>
       ${totalsHtml(inv, true)}
       ${textareaField('ملاحظات', 'note', inv ? inv.note : '')}
       <div class="form-actions">
@@ -144,32 +161,70 @@ function openSaleForm(id) {
 
   const form = $('#invForm');
   const box = $('#saleLines');
+  const boltLen = bid => num((byId(db.bolts, bid) || {}).length);
+  const lineMetersOf = l => round2(l.boltIds.reduce((a, bid) => a + boltLen(bid), 0));
+  const lineSub = l => round2(lineMetersOf(l) * num(l.price));
 
-  const lineSub = l => round2([...l.boltIds].reduce((a, bid) => a + num((byId(db.bolts, bid) || {}).length), 0) * num(l.price));
+  function setCount(l, n) {
+    const av = available(l.fabricId);
+    n = Math.max(0, Math.min(av.length, parseInt(n, 10) || 0));
+    const valid = l.boltIds.filter(bid => av.some(b => b.id === bid));
+    if (n < valid.length) l.boltIds = valid.slice(0, n);
+    else {
+      l.boltIds = valid;
+      for (const b of av) { if (l.boltIds.length >= n) break; if (!l.boltIds.includes(b.id)) l.boltIds.push(b.id); }
+    }
+  }
+
+  function detailsHtml(l, i) {
+    const f = byId(db.fabrics, l.fabricId);
+    if (!f) return '';
+    const av = available(l.fabricId);
+    if (!av.length) return '<p class="muted small">مفيش توبات متاحة من الصنف ده</p>';
+    const lens = new Set(av.map(b => num(b.length)));
+    return `<details class="bolt-details" data-i="${i}" ${l.open ? 'open' : ''}>
+      <summary><span class="link">اختيار توبات معينة بالرقم</span></summary>
+      <div class="bolt-pick">${av.map(b => `
+        <label class="bolt-chip ${l.boltIds.includes(b.id) ? 'on' : ''}"><input type="checkbox" data-bolt="${b.id}" ${l.boltIds.includes(b.id) ? 'checked' : ''}>
+          <span>#${esc(b.no)}</span>${lens.size > 1 ? `<small>${fmt(b.length)}</small>` : ''}</label>`).join('')}</div>
+      ${lens.size === 1 ? `<p class="muted small">كل التوبات طولها ${fmt([...lens][0])} ${esc(f.unit)}</p>` : ''}
+    </details>`;
+  }
+
+  function sumHtml(l) {
+    const f = byId(db.fabrics, l.fabricId);
+    return `<span>${l.boltIds.length} توب — ${fmt(lineMetersOf(l))} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineSub(l))}</b>`;
+  }
 
   function draw() {
     box.innerHTML = lines.map((l, i) => {
       const f = byId(db.fabrics, l.fabricId);
-      const av = l.fabricId ? available(l.fabricId) : [];
-      const meters = [...l.boltIds].reduce((a, bid) => a + num((byId(db.bolts, bid) || {}).length), 0);
-      const opts = fabricsWithStock().concat(f && !fabricsWithStock().includes(f) ? [f] : []).map(x =>
-        `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(x.name)}${x.color ? ' - ' + esc(x.color) : ''}${x.code ? ' (' + esc(x.code) + ')' : ''} — ${available(x.id).length} توب</option>`).join('');
+      const avCount = l.fabricId ? available(l.fabricId).length : 0;
+      const list = fabricsWithStock();
+      const opts = list.concat(f && !list.includes(f) ? [f] : []).map(x =>
+        `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(x.name)}${x.color ? ' - ' + esc(x.color) : ''} (${available(x.id).length} توب)</option>`).join('');
       return `<div class="inv-line" data-i="${i}">
         <div class="inv-line-head">
           <label class="field grow"><span>الصنف</span><select data-k="fabricId"><option value="">— اختر الصنف —</option>${opts}</select></label>
-          <label class="field"><span>سعر ال${f ? esc(f.unit) : 'متر'}</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>
-          <div class="line-sum"><span>${l.boltIds.size} توب — ${fmt(meters)} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineSub(l))}</b></div>
-          <button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>
+          ${f ? stepperHtml(l.boltIds.length, avCount) : ''}
+          ${f ? `<label class="field price-field"><span>سعر ال${esc(f.unit)}</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>` : ''}
+          <div class="line-sum">${sumHtml(l)}</div>
+          ${lines.length > 1 || l.fabricId ? `<button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>` : ''}
         </div>
-        ${f ? (av.length ? `
-          <div class="bolt-pick-head"><span class="muted small">اختار التوبات (${av.length} متاح):</span>
-            <button type="button" class="btn btn-sm" data-all="${i}">${av.every(b => l.boltIds.has(b.id)) ? 'إلغاء الكل' : 'اختيار الكل'}</button></div>
-          <div class="bolt-pick">${av.map(b => `
-            <label class="bolt-chip ${l.boltIds.has(b.id) ? 'on' : ''}"><input type="checkbox" data-bolt="${b.id}" ${l.boltIds.has(b.id) ? 'checked' : ''}>
-              <span>#${esc(b.no)}</span><small>${fmt(b.length)}</small></label>`).join('')}</div>`
-          : '<p class="muted small">مفيش توبات متاحة من الصنف ده</p>') : ''}
+        ${f ? `<div class="avail-note muted small">متاح ${avCount} توب</div>` : ''}
+        <div class="details-slot">${detailsHtml(l, i)}</div>
       </div>`;
     }).join('');
+    updateTotals();
+  }
+
+  // تحديث كارت واحد من غير ما نرسم الفورم كله (عشان الكتابة متتقطعش)
+  function refreshCard(card) {
+    const i = +card.dataset.i; const l = lines[i];
+    $('.line-sum', card).innerHTML = sumHtml(l);
+    const cnt = $('[data-k=count]', card);
+    if (cnt && document.activeElement !== cnt) cnt.value = l.boltIds.length;
+    $('.details-slot', card).innerHTML = detailsHtml(l, i);
     updateTotals();
   }
 
@@ -188,18 +243,18 @@ function openSaleForm(id) {
     if (!l) {
       const f = byId(db.fabrics, fabricId);
       l = lines.find(x => !x.fabricId);
-      if (l) { l.fabricId = fabricId; l.price = f.price; } else { l = { fabricId, price: f.price, boltIds: new Set() }; lines.push(l); }
+      if (l) { l.fabricId = fabricId; l.price = f.price; } else { l = { fabricId, price: f.price, boltIds: [], open: false }; lines.push(l); }
     }
     return l;
   }
 
   function addBolt(b) {
     const l = lineFor(b.fabricId);
-    if (l.boltIds.has(b.id)) return toast(`التوب رقم ${b.no} موجود في الفاتورة`, 'error');
-    l.boltIds.add(b.id);
+    if (l.boltIds.includes(b.id)) return toast(`التوب رقم ${b.no} موجود في الفاتورة`, 'error');
+    l.boltIds.push(b.id);
     $('#quickChoices').innerHTML = '';
     draw();
-    toast(`تمت إضافة التوب #${b.no} (${fmt(b.length)})`);
+    toast(`تمت إضافة التوب #${b.no}`);
   }
 
   box.addEventListener('change', e => {
@@ -208,32 +263,41 @@ function openSaleForm(id) {
     if (e.target.dataset.k === 'fabricId') {
       const fid = e.target.value;
       if (fid && lines.some(x => x !== l && x.fabricId === fid)) { toast('الصنف ده موجود في سطر تاني', 'error'); e.target.value = l.fabricId; return; }
-      l.fabricId = fid; l.boltIds = new Set();
+      l.fabricId = fid; l.boltIds = []; l.open = false;
       const f = byId(db.fabrics, fid); l.price = f ? f.price : '';
+      if (f) setCount(l, 1);
       draw();
+      const cnt = $(`.inv-line[data-i="${card.dataset.i}"] [data-k=count]`, box);
+      if (cnt) cnt.select();
     }
+    if (e.target.dataset.k === 'count') { setCount(l, e.target.value); e.target.value = l.boltIds.length; refreshCard(card); }
     if (e.target.dataset.bolt) {
-      e.target.checked ? l.boltIds.add(e.target.dataset.bolt) : l.boltIds.delete(e.target.dataset.bolt);
-      draw();
+      const bid = e.target.dataset.bolt;
+      if (e.target.checked) { if (!l.boltIds.includes(bid)) l.boltIds.push(bid); } else l.boltIds = l.boltIds.filter(x => x !== bid);
+      l.open = true;
+      refreshCard(card);
     }
   });
   box.addEventListener('input', e => {
-    if (e.target.dataset.k !== 'price') return;
-    const card = e.target.closest('.inv-line');
+    const card = e.target.closest('.inv-line'); if (!card) return;
     const l = lines[card.dataset.i];
-    l.price = e.target.value;
-    $('.line-sum b', card).textContent = fmt(lineSub(l));
-    updateTotals();
+    if (e.target.dataset.k === 'price') { l.price = e.target.value; refreshCard(card); }
+    if (e.target.dataset.k === 'count' && e.target.value !== '') { setCount(l, e.target.value); refreshCard(card); }
   });
+  box.addEventListener('toggle', e => {
+    if (!e.target.matches || !e.target.matches('.bolt-details')) return;
+    lines[e.target.dataset.i].open = e.target.open;
+  }, true);
   box.addEventListener('click', e => {
     const rm = e.target.closest('[data-rm]');
-    const all = e.target.closest('[data-all]');
-    if (rm) { lines.splice(+rm.dataset.rm, 1); if (!lines.length) lines.push({ fabricId: '', price: '', boltIds: new Set() }); draw(); }
-    if (all) {
-      const l = lines[all.dataset.all];
-      const av = available(l.fabricId);
-      if (av.every(b => l.boltIds.has(b.id))) l.boltIds = new Set(); else av.forEach(b => l.boltIds.add(b.id));
-      draw();
+    const st = e.target.closest('[data-step]');
+    if (rm) { lines.splice(+rm.dataset.rm, 1); if (!lines.length) lines.push(newLine()); draw(); }
+    if (st) {
+      const card = st.closest('.inv-line'); const l = lines[card.dataset.i];
+      const before = l.boltIds.length;
+      setCount(l, before + Number(st.dataset.step));
+      if (l.boltIds.length === before && st.dataset.step === '1') toast('مفيش توبات تانية متاحة من الصنف ده', 'error');
+      refreshCard(card);
     }
   });
 
@@ -248,11 +312,11 @@ function openSaleForm(id) {
     if (hits.length === 1) return addBolt(hits[0]);
     $('#quickChoices').innerHTML = `<span class="muted small">فيه أكتر من توب رقمه ${esc(q)}، اختار:</span> ` + hits.map(b => {
       const f = byId(db.fabrics, b.fabricId);
-      return `<button type="button" class="btn btn-sm" data-pick="${b.id}">${esc(f.name)}${f.color ? ' - ' + esc(f.color) : ''} (${fmt(b.length)})</button>`;
+      return `<button type="button" class="btn btn-sm" data-pick="${b.id}">${esc(f.name)}${f.color ? ' - ' + esc(f.color) : ''}</button>`;
     }).join(' ');
   });
   $('#quickChoices').onclick = e => { const b = e.target.closest('[data-pick]'); if (b) addBolt(byId(db.bolts, b.dataset.pick)); };
-  $('#addLine').onclick = () => { lines.push({ fabricId: '', price: '', boltIds: new Set() }); draw(); };
+  $('#addLine').onclick = () => { lines.push(newLine()); draw(); $$('#saleLines select').pop().focus(); };
   $('#payAll').onclick = () => { form.paid.value = readTotals(form, sub()).total; updateTotals(); };
   form.discount.oninput = updateTotals;
   form.paid.oninput = updateTotals;
@@ -262,11 +326,11 @@ function openSaleForm(id) {
   form.onsubmit = e => {
     e.preventDefault();
     const after = e.submitter && e.submitter.dataset.after;
-    const used = lines.filter(l => l.fabricId || l.boltIds.size);
-    if (!used.length) return toast('اختار توب واحد على الأقل', 'error');
+    const used = lines.filter(l => l.fabricId || l.boltIds.length);
+    if (!used.length) return toast('اختار صنف وعدد التوب', 'error');
     for (const l of used) {
       if (!l.fabricId) return toast('اختار الصنف في كل سطر', 'error');
-      if (!l.boltIds.size) return toast(`اختار التوبات من "${byId(db.fabrics, l.fabricId).name}"`, 'error');
+      if (!l.boltIds.length) return toast(`اكتب عدد التوب من "${byId(db.fabrics, l.fabricId).name}"`, 'error');
       if (num(l.price) <= 0) return toast('اكتب سعر المتر', 'error');
     }
     const s = sub();
@@ -287,16 +351,49 @@ function openSaleForm(id) {
 }
 
 /* =====================================================
-   فاتورة شراء (تسجيل التوبات الجديدة)
+   محرر التوبات (عدد × طول، والتفاصيل عند الحاجة)
+   بيستخدم في فاتورة الشراء وفي إضافة توبات للمخزن
+   ===================================================== */
+const uniformLength = bolts => {
+  const s = new Set(bolts.map(b => String(num(b.length))));
+  return s.size === 1 && bolts.length && num(bolts[0].length) > 0 ? num(bolts[0].length) : '';
+};
+
+function resizeBolts(bolts, fabricId, n, len) {
+  n = Math.max(0, Math.min(1000, parseInt(n, 10) || 0));
+  if (bolts.length > n) bolts.length = n;
+  while (bolts.length < n) bolts.push({ no: nextBoltNo(fabricId, bolts.map(b => b.no)), length: len !== undefined ? len : (uniformLength(bolts) || '') });
+  return bolts;
+}
+
+function boltEditorHtml(bolts, unit, open, idx) {
+  const u = uniformLength(bolts);
+  const mixed = bolts.length > 1 && u === '';
+  return `<div class="bolt-editor">
+      ${stepperHtml(bolts.length)}
+      <label class="field len-field"><span>طول التوب (${esc(unit)})</span>
+        <input type="number" step="any" min="0" data-k="len" value="${u}" placeholder="${mixed ? 'مختلف' : 'مثلاً 50'}"></label>
+    </div>
+    <div class="details-slot">${bolts.length ? `
+      <details class="bolt-details" data-i="${idx}" ${open ? 'open' : ''}>
+        <summary><span class="link">تعديل أرقام أو أطوال التوبات</span></summary>
+        <table class="table compact bolt-rows"><thead><tr><th>رقم التوب</th><th>الطول</th><th></th></tr></thead><tbody>
+          ${bolts.map((b, j) => `<tr><td><input data-b="${j}" data-f="no" value="${esc(b.no)}" aria-label="رقم التوب"></td><td><input type="number" step="any" min="0" data-b="${j}" data-f="length" value="${esc(b.length)}" aria-label="الطول"></td><td><button type="button" class="icon-btn" data-rmb="${j}" aria-label="حذف التوب">✕</button></td></tr>`).join('')}
+        </tbody></table>
+      </details>` : ''}</div>`;
+}
+
+/* =====================================================
+   فاتورة شراء
    ===================================================== */
 function openPurchaseForm(id) {
   if (!db.fabrics.length) { toast('ضيف أصناف القماش الأول', 'error'); location.hash = '#fabrics'; return; }
   if (!db.suppliers.length) { toast('ضيف مورد الأول من شاشة الموردين', 'error'); location.hash = '#suppliers'; return; }
   const inv = id ? byId(db.purchases, id) : null;
   if (inv && purchaseHasSoldBolts(inv.id)) return toast('مينفعش تعدل فاتورة شراء اتباع منها توبات', 'error');
-  const lines = inv ? inv.lines.filter(l => l.bolts && l.bolts.length).map(l => ({ fabricId: l.fabricId, price: l.price, bolts: l.bolts.map(b => ({ boltId: b.boltId, no: b.no, length: b.length })) }))
-    : [{ fabricId: '', price: '', bolts: [] }];
-  if (!lines.length) lines.push({ fabricId: '', price: '', bolts: [] });
+  const newLine = () => ({ fabricId: '', price: '', bolts: [], open: false });
+  const lines = inv ? inv.lines.filter(l => l.bolts && l.bolts.length).map(l => ({ fabricId: l.fabricId, price: l.price, open: false, bolts: l.bolts.map(b => ({ boltId: b.boltId, no: b.no, length: b.length })) })) : [newLine()];
+  if (!lines.length) lines.push(newLine());
   const parties = db.suppliers.map(p => ({ value: p.id, label: p.name }));
 
   openModal(id ? `تعديل فاتورة شراء رقم ${inv.no}` : 'فاتورة شراء جديدة', `
@@ -320,6 +417,7 @@ function openPurchaseForm(id) {
   const box = $('#purLines');
   const lineMetersOf = l => l.bolts.reduce((a, b) => a + num(b.length), 0);
   const sub = () => round2(lines.reduce((a, l) => a + lineMetersOf(l) * num(l.price), 0));
+  const sumHtml = l => { const f = byId(db.fabrics, l.fabricId); return `<span>${l.bolts.length} توب — ${fmt(lineMetersOf(l))} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineMetersOf(l) * num(l.price))}</b>`; };
 
   function draw() {
     box.innerHTML = lines.map((l, i) => {
@@ -328,20 +426,27 @@ function openPurchaseForm(id) {
         <div class="inv-line-head">
           <label class="field grow"><span>الصنف</span><select data-k="fabricId"><option value="">— اختر الصنف —</option>
             ${db.fabrics.map(x => `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(x.name)}${x.color ? ' - ' + esc(x.color) : ''}${x.code ? ' (' + esc(x.code) + ')' : ''}</option>`).join('')}</select></label>
-          <label class="field"><span>سعر ال${f ? esc(f.unit) : 'متر'} (شراء)</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>
-          <div class="line-sum"><span>${l.bolts.length} توب — ${fmt(lineMetersOf(l))} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineMetersOf(l) * num(l.price))}</b></div>
-          <button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>
+          ${f ? `<label class="field price-field"><span>سعر ال${esc(f.unit)} (شراء)</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>` : ''}
+          <div class="line-sum">${sumHtml(l)}</div>
+          ${lines.length > 1 || l.fabricId ? `<button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>` : ''}
         </div>
-        ${f ? `
-          ${l.bolts.length ? `<table class="table compact bolt-rows"><thead><tr><th>رقم التوب</th><th>الطول</th><th></th></tr></thead><tbody>
-            ${l.bolts.map((b, j) => `<tr><td><input data-b="${j}" data-f="no" value="${esc(b.no)}" aria-label="رقم التوب"></td><td><input type="number" step="any" min="0" data-b="${j}" data-f="length" value="${esc(b.length)}" aria-label="الطول"></td><td><button type="button" class="icon-btn" data-rmb="${j}" aria-label="حذف التوب">✕</button></td></tr>`).join('')}
-          </tbody></table>` : ''}
-          <div class="row-actions">
-            <button type="button" class="btn btn-sm" data-addb="${i}">+ توب</button>
-            <span class="bulk">أو أضف <input type="number" data-bulkn min="1" step="1" placeholder="عدد"> توب طول كل واحد <input type="number" data-bulkl min="0" step="any" placeholder="طول"> <button type="button" class="btn btn-sm" data-bulk="${i}">إضافة</button></span>
-          </div>` : ''}
+        ${f ? boltEditorHtml(l.bolts, f.unit, l.open, i) : ''}
       </div>`;
     }).join('');
+    updateTotals();
+  }
+
+  function refreshCard(card, redrawDetails = true) {
+    const i = +card.dataset.i; const l = lines[i]; const f = byId(db.fabrics, l.fabricId);
+    $('.line-sum', card).innerHTML = sumHtml(l);
+    const cnt = $('[data-k=count]', card);
+    if (cnt && document.activeElement !== cnt) cnt.value = l.bolts.length;
+    const len = $('[data-k=len]', card);
+    if (len && document.activeElement !== len) { const u = uniformLength(l.bolts); len.value = u; len.placeholder = l.bolts.length > 1 && u === '' ? 'مختلف' : 'مثلاً 50'; }
+    if (redrawDetails && f) {
+      const tmp = document.createElement('div'); tmp.innerHTML = boltEditorHtml(l.bolts, f.unit, l.open, i);
+      $('.details-slot', card).replaceWith($('.details-slot', tmp));
+    }
     updateTotals();
   }
 
@@ -351,53 +456,43 @@ function openPurchaseForm(id) {
     $('#tSub').textContent = fmt(s);
     $('#tTotal').textContent = money(total);
     $('#tRem').textContent = money(round2(total - paid));
-    $$('.inv-line', box).forEach(card => {
-      const l = lines[card.dataset.i]; const f = byId(db.fabrics, l.fabricId);
-      $('.line-sum span', card).textContent = `${l.bolts.length} توب — ${fmt(lineMetersOf(l))} ${f ? f.unit : 'م'}`;
-      $('.line-sum b', card).textContent = fmt(lineMetersOf(l) * num(l.price));
-    });
   }
 
-  const usedNos = l => l.bolts.map(b => b.no);
-  const pushBolt = (l, len = '') => l.bolts.push({ no: nextBoltNo(l.fabricId, usedNos(l)), length: len });
-
   box.addEventListener('change', e => {
-    if (e.target.dataset.k !== 'fabricId') return;
-    const l = lines[e.target.closest('.inv-line').dataset.i];
-    const fid = e.target.value;
-    if (fid && lines.some(x => x !== l && x.fabricId === fid)) { toast('الصنف ده موجود في سطر تاني', 'error'); e.target.value = l.fabricId; return; }
-    l.fabricId = fid; l.bolts = [];
-    const f = byId(db.fabrics, fid); l.price = f ? f.cost || '' : '';
-    if (f) pushBolt(l);
-    draw();
+    const card = e.target.closest('.inv-line'); if (!card) return;
+    const l = lines[card.dataset.i];
+    if (e.target.dataset.k === 'fabricId') {
+      const fid = e.target.value;
+      if (fid && lines.some(x => x !== l && x.fabricId === fid)) { toast('الصنف ده موجود في سطر تاني', 'error'); e.target.value = l.fabricId; return; }
+      l.fabricId = fid; l.bolts = []; l.open = false;
+      const f = byId(db.fabrics, fid); l.price = f ? f.cost || '' : '';
+      draw();
+      const cnt = $(`.inv-line[data-i="${card.dataset.i}"] [data-k=count]`, box);
+      if (cnt) cnt.focus();
+    }
+    if (e.target.dataset.k === 'count') { resizeBolts(l.bolts, l.fabricId, e.target.value); refreshCard(card); }
   });
   box.addEventListener('input', e => {
     const card = e.target.closest('.inv-line'); if (!card) return;
     const l = lines[card.dataset.i];
-    if (e.target.dataset.k === 'price') l.price = e.target.value;
-    if (e.target.dataset.b !== undefined) l.bolts[+e.target.dataset.b][e.target.dataset.f] = e.target.value;
-    updateTotals();
+    const k = e.target.dataset.k;
+    if (k === 'price') { l.price = e.target.value; refreshCard(card, false); }
+    if (k === 'count' && e.target.value !== '') { resizeBolts(l.bolts, l.fabricId, e.target.value); refreshCard(card); }
+    if (k === 'len') { l.bolts.forEach(b => { b.length = e.target.value; }); refreshCard(card); }
+    if (e.target.dataset.b !== undefined) { l.bolts[+e.target.dataset.b][e.target.dataset.f] = e.target.value; refreshCard(card, false); }
   });
+  box.addEventListener('toggle', e => {
+    if (e.target.matches && e.target.matches('.bolt-details')) lines[e.target.dataset.i].open = e.target.open;
+  }, true);
   box.addEventListener('click', e => {
     const card = e.target.closest('.inv-line'); if (!card) return;
     const l = lines[card.dataset.i];
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.rm !== undefined) { lines.splice(+t.dataset.rm, 1); if (!lines.length) lines.push({ fabricId: '', price: '', bolts: [] }); draw(); }
-    if (t.dataset.rmb !== undefined) { l.bolts.splice(+t.dataset.rmb, 1); draw(); }
-    if (t.dataset.addb !== undefined) {
-      pushBolt(l); draw();
-      const ins = $$(`.inv-line[data-i="${card.dataset.i}"] [data-f=length]`, box); ins[ins.length - 1].focus();
-    }
-    if (t.dataset.bulk !== undefined) {
-      const n = parseInt($('[data-bulkn]', card).value, 10);
-      if (!(n > 0) || n > 500) return toast('اكتب عدد صحيح', 'error');
-      const len = $('[data-bulkl]', card).value;
-      l.bolts = l.bolts.filter(b => String(b.no).trim() && num(b.length) > 0);
-      for (let k = 0; k < n; k++) pushBolt(l, len);
-      draw();
-    }
+    if (t.dataset.rm !== undefined) { lines.splice(+t.dataset.rm, 1); if (!lines.length) lines.push(newLine()); draw(); }
+    if (t.dataset.rmb !== undefined) { l.bolts.splice(+t.dataset.rmb, 1); refreshCard(card); }
+    if (t.dataset.step !== undefined) { resizeBolts(l.bolts, l.fabricId, l.bolts.length + Number(t.dataset.step)); refreshCard(card); }
   });
-  $('#addLine').onclick = () => { lines.push({ fabricId: '', price: '', bolts: [] }); draw(); };
+  $('#addLine').onclick = () => { lines.push(newLine()); draw(); $$('#purLines select').pop().focus(); };
   $('#payAll').onclick = () => { form.paid.value = readTotals(form, sub()).total; updateTotals(); };
   form.discount.oninput = updateTotals;
   form.paid.oninput = updateTotals;
@@ -409,7 +504,12 @@ function openPurchaseForm(id) {
     if (!form.party.value) return toast('اختر المورد', 'error');
     const used = lines.filter(l => l.fabricId);
     if (!used.length) return toast('ضيف صنف واحد على الأقل', 'error');
-    if (used.some(l => num(l.price) <= 0)) return toast('اكتب سعر شراء المتر لكل صنف', 'error');
+    for (const l of used) {
+      const f = byId(db.fabrics, l.fabricId);
+      if (!l.bolts.length) return toast(`اكتب عدد التوب من "${f.name}"`, 'error');
+      if (l.bolts.some(b => num(b.length) <= 0)) return toast(`اكتب طول التوب في "${f.name}"`, 'error');
+      if (num(l.price) <= 0) return toast(`اكتب سعر شراء المتر في "${f.name}"`, 'error');
+    }
     const { disc, total, paid } = readTotals(form, sub());
     const err0 = validateTotals(disc, total, paid);
     if (err0) return toast(err0, 'error');

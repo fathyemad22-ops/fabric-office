@@ -355,3 +355,51 @@ body.auth-mode .sidebar, body.auth-mode .main { display: none; }
 .balance-preview { background: #faf8f6; border-radius: 8px; padding: 8px 12px; margin: 0; }
 .balance-preview:empty { display: none; }
 @media print { .stmt-table tfoot td { font-weight: 700; background: #eee; } }
+
+/* ===== شكل أبسط للتوبات ===== */
+.stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; height: 40px; }
+.stepper input { width: 64px; border: 0 !important; border-radius: 0 !important; text-align: center; font-weight: 700; font-size: 16px; padding: 0 4px !important; min-height: 0 !important; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.step-btn { width: 40px; border: 0; background: #faf8f6; font-size: 20px; cursor: pointer; color: var(--primary); font-family: inherit; }
+.step-btn:hover { background: var(--primary-soft); }
+.qty-field, .price-field, .len-field { flex: 0 0 auto !important; }
+.price-field input, .len-field input { width: 120px !important; }
+.avail-note { margin-top: 6px; }
+.bolt-details { margin-top: 8px; }
+.bolt-details > summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bolt-details > summary::-webkit-details-marker { display: none; }
+.bolt-details > summary .link { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.bolt-details[open] > summary { margin-bottom: 8px; }
+.bolt-details[open] > summary .link { display: none; }
+.bolt-editor { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 10px; }
+.row-actions.between { justify-content: space-between; align-items: center; }
+.quick-inline { display: inline-flex; align-items: center; gap: 8px; }
+.quick-inline input { width: 120px; min-height: 36px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.bolt-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.bolt-summary div { background: #faf8f6; border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; display: flex; flex-direction: column; }
+.bolt-summary b { font-size: 24px; color: var(--primary); line-height: 1.2; }
+.bolt-summary span { font-size: 13px; color: var(--muted); }
+.add-bolts { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; }
+.add-bolts .section-title { margin-top: 0; }
+.add-total { margin: 10px 0 0; }
+.bolt-list { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.bolt-list > summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.bolt-list[open] > summary { margin-bottom: 8px; }
+@media (max-width: 600px) {
+  .inv-line-head .grow { flex-basis: 100%; }
+  .price-field input, .len-field input { width: 100px !important; }
+  .line-sum { min-width: 0; flex: 1; }
+}
+.inv-line { position: relative; }
+.inv-line-head > .icon-btn[data-rm] { position: absolute; top: 6px; inset-inline-end: 6px; width: 30px; height: 30px; font-size: 15px; color: var(--muted); }
+.inv-line-head { padding-inline-end: 28px; }
+.bolt-details[open] > summary { display: none; }
+@media (max-width: 600px) {
+  .inv-line-head { padding-inline-end: 0; }
+  .inv-line-head .grow { padding-inline-end: 30px; }
+  .line-sum { flex: 1 1 100%; flex-direction: row; justify-content: space-between; align-items: center; background: #faf8f6; border-radius: 8px; padding: 8px 12px; }
+  .qty-field, .price-field, .len-field { flex: 1 1 0 !important; }
+  .price-field input, .len-field input { width: 100% !important; }
+  .stepper { width: 100%; }
+  .stepper input { flex: 1; width: auto; }
+}

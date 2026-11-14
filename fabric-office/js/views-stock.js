@@ -126,41 +126,40 @@ function openFabricForm(id) {
 }
 
 /* ---------- نافذة التوبات ---------- */
-function openBoltsModal(fabricId) {
+function openBoltsModal(fabricId, showList = false) {
   const f = byId(db.fabrics, fabricId);
   if (!f) return;
   const inStock = boltsInStock(fabricId);
   const sold = db.bolts.filter(b => b.fabricId === fabricId && b.status === 'sold');
   const s = stockOf(fabricId);
   const editable = can('stock');
+  const lens = new Set(inStock.map(b => num(b.length)));
 
-  openModal(`توبات: ${f.name}${f.color ? ' - ' + f.color : ''}`, `
-    <div class="stats compact-stats">
-      ${statCard('في المخزن', `${s.count} توب`)}
-      ${statCard('إجمالي الأطوال', `${fmt(s.meters)} ${esc(f.unit)}`)}
-      ${statCard('اتباع', `${sold.length} توب`)}
+  openModal(`${f.name}${f.color ? ' - ' + f.color : ''}`, `
+    <div class="bolt-summary">
+      <div><b>${s.count}</b><span>توب في المخزن</span></div>
+      <div><b>${fmt(s.meters)}</b><span>${esc(f.unit)}</span></div>
+      <div><b>${sold.length}</b><span>توب اتباع</span></div>
     </div>
-    ${inStock.length ? `<div class="bolt-grid">${inStock.map(b => `
-      <div class="bolt-card">
-        <span class="bolt-no">#${esc(b.no)}</span>
-        <span class="bolt-len">${fmt(b.length)} ${esc(f.unit)}</span>
-        <small class="muted">${b.source === 'purchase' ? 'شراء' : 'رصيد أول'} ${fmtDate(b.addedAt)}</small>
-        ${editable && b.source !== 'purchase' ? `<span class="bolt-actions"><button class="btn btn-sm" data-edit-bolt="${b.id}">تعديل</button><button class="btn btn-sm btn-ghost-danger" data-del-bolt="${b.id}">حذف</button></span>` : ''}
-      </div>`).join('')}</div>` : emptyState('مفيش توبات من الصنف ده في المخزن')}
     ${editable ? `
-      <h3 class="section-title">إضافة توبات موجودة عندك (رصيد أول المدة أو جرد)</h3>
-      <p class="muted small">للبضاعة الجديدة من مورد استخدم فاتورة شراء عشان حساب المورد يتحدث.</p>
-      <form id="openingForm">
-        <div id="openingRows"></div>
-        <div class="row-actions">
-          <button type="button" class="btn btn-sm" id="addOpenRow">+ توب</button>
-          <span class="bulk">أو أضف <input type="number" id="bulkCount" min="1" step="1" placeholder="عدد"> توب طول كل واحد <input type="number" id="bulkLen" min="0" step="any" placeholder="طول"> <button type="button" class="btn btn-sm" id="bulkAdd">إضافة</button></span>
-        </div>
-        <div class="form-actions"><button class="btn btn-primary" type="submit">حفظ التوبات</button><button class="btn" type="button" data-close>إغلاق</button></div>
-      </form>` : '<div class="form-actions"><button class="btn" data-close>إغلاق</button></div>'}`, { wide: true });
+      <form id="openingForm" class="add-bolts">
+        <h3 class="section-title">إضافة توبات للمخزن</h3>
+        <div id="openingEditor"></div>
+        <p class="muted small">دي للتوبات اللي عندك فعلاً (رصيد أول المدة أو جرد). البضاعة الجديدة من مورد سجلها بفاتورة شراء عشان حسابه يتحدث.</p>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">إضافة للمخزن</button><button class="btn" type="button" data-close>إغلاق</button></div>
+      </form>` : ''}
+    ${inStock.length ? `
+      <details class="bolt-list" ${showList ? 'open' : ''}>
+        <summary>عرض التوبات الموجودة (${inStock.length})${lens.size === 1 ? ` — كلها ${fmt([...lens][0])} ${esc(f.unit)}` : ''}</summary>
+        <table class="table compact"><thead><tr><th>رقم التوب</th><th>الطول</th><th>المصدر</th><th></th></tr></thead><tbody>
+          ${inStock.map(b => `<tr><td><b>#${esc(b.no)}</b></td><td>${fmt(b.length)} ${esc(f.unit)}</td><td class="muted small">${b.source === 'purchase' ? 'فاتورة شراء' : 'رصيد أول'} — ${fmtDate(b.addedAt)}</td>
+            <td class="actions">${editable && b.source !== 'purchase' ? `<button class="btn btn-sm" data-edit-bolt="${b.id}">تعديل الطول</button><button class="btn btn-sm btn-ghost-danger" data-del-bolt="${b.id}">حذف</button>` : ''}</td></tr>`).join('')}
+        </tbody></table>
+      </details>` : '<p class="muted">مفيش توبات من الصنف ده في المخزن دلوقتي.</p>'}
+    ${!editable ? '<div class="form-actions"><button class="btn" data-close>إغلاق</button></div>' : ''}`, { wide: true });
 
   const modal = $('#modalBody');
-  modal.onclick = async e => {
+  modal.onclick = e => {
     const ed = e.target.closest('[data-edit-bolt]');
     const del = e.target.closest('[data-del-bolt]');
     if (ed) {
@@ -168,38 +167,54 @@ function openBoltsModal(fabricId) {
       const val = prompt(`طول التوب رقم ${b.no}:`, b.length);
       if (val === null) return;
       if (num(val) <= 0) return toast('طول غير صحيح', 'error');
-      b.length = round2(val); saveDB(); toast('تم التعديل'); openBoltsModal(fabricId); render();
+      b.length = round2(val); saveDB(); toast('تم التعديل'); openBoltsModal(fabricId, true); render();
     }
     if (del) {
       const b = byId(db.bolts, del.dataset.delBolt);
       if (!confirm(`حذف التوب رقم ${b.no} من المخزن؟`)) return;
-      db.bolts = db.bolts.filter(x => x.id !== b.id); saveDB(); toast('تم حذف التوب'); openBoltsModal(fabricId); render();
+      db.bolts = db.bolts.filter(x => x.id !== b.id); saveDB(); toast('تم حذف التوب'); openBoltsModal(fabricId, true); render();
     }
   };
   if (!editable) return;
 
-  const rows = [];
-  const box = $('#openingRows');
+  const bolts = [];
+  const state = { open: false };
+  const ed = $('#openingEditor');
   const draw = () => {
-    box.innerHTML = rows.length ? `<table class="table compact bolt-rows"><thead><tr><th>رقم التوب</th><th>الطول (${esc(f.unit)})</th><th></th></tr></thead><tbody>
-      ${rows.map((r, i) => `<tr data-i="${i}"><td><input data-k="no" value="${esc(r.no)}" aria-label="رقم التوب"></td><td><input type="number" step="any" min="0" data-k="length" value="${esc(r.length)}" aria-label="الطول"></td><td><button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف">✕</button></td></tr>`).join('')}
-    </tbody></table><p class="muted small">${rows.length} توب — ${fmt(rows.reduce((a, r) => a + num(r.length), 0))} ${esc(f.unit)}</p>` : '';
+    ed.innerHTML = boltEditorHtml(bolts, f.unit, state.open, 0) +
+      (bolts.length ? `<p class="add-total">هيتضاف <b>${bolts.length} توب</b> — ${fmt(bolts.reduce((a, b) => a + num(b.length), 0))} ${esc(f.unit)}</p>` : '');
   };
-  const add = (len = '') => rows.push({ no: nextBoltNo(fabricId, rows.map(r => r.no)), length: len });
-  box.oninput = e => { const tr = e.target.closest('tr'); if (tr && e.target.dataset.k) rows[tr.dataset.i][e.target.dataset.k] = e.target.value; };
-  box.addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) { rows.splice(+b.dataset.rm, 1); draw(); } });
-  $('#addOpenRow').onclick = () => { add(); draw(); const ins = $$('[data-k=length]', box); ins[ins.length - 1].focus(); };
-  $('#bulkAdd').onclick = () => {
-    const n = parseInt($('#bulkCount').value, 10);
-    if (!(n > 0) || n > 500) return toast('اكتب عدد صحيح', 'error');
-    for (let i = 0; i < n; i++) add($('#bulkLen').value);
-    draw();
+  const refresh = () => {
+    // بنحدّث كل حاجة ما عدا الخانة اللي بتكتب فيها
+    const tmp = document.createElement('div');
+    tmp.innerHTML = boltEditorHtml(bolts, f.unit, state.open, 0);
+    $('.details-slot', ed).replaceWith($('.details-slot', tmp));
+    const cnt = $('[data-k=count]', ed); if (document.activeElement !== cnt) cnt.value = bolts.length;
+    const len = $('[data-k=len]', ed);
+    if (document.activeElement !== len) { const u = uniformLength(bolts); len.value = u; len.placeholder = bolts.length > 1 && u === '' ? 'مختلف' : 'مثلاً 50'; }
+    let tot = $('.add-total', ed);
+    if (!tot) { tot = document.createElement('p'); tot.className = 'add-total'; ed.appendChild(tot); }
+    tot.innerHTML = bolts.length ? `هيتضاف <b>${bolts.length} توب</b> — ${fmt(bolts.reduce((x, y) => x + num(y.length), 0))} ${esc(f.unit)}` : '';
   };
+  ed.addEventListener('input', e => {
+    const k = e.target.dataset.k;
+    if (k === 'count' && e.target.value !== '') { resizeBolts(bolts, fabricId, e.target.value); refresh(); }
+    if (k === 'len') { bolts.forEach(b => { b.length = e.target.value; }); refresh(); }
+    if (e.target.dataset.b !== undefined) { bolts[+e.target.dataset.b][e.target.dataset.f] = e.target.value; const t = $('.add-total', ed); if (t) t.innerHTML = `هيتضاف <b>${bolts.length} توب</b> — ${fmt(bolts.reduce((x, y) => x + num(y.length), 0))} ${esc(f.unit)}`; }
+  });
+  ed.addEventListener('click', e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.step !== undefined) { resizeBolts(bolts, fabricId, bolts.length + Number(t.dataset.step)); refresh(); }
+    if (t.dataset.rmb !== undefined) { bolts.splice(+t.dataset.rmb, 1); refresh(); }
+  });
+  ed.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('.bolt-details')) state.open = e.target.open; }, true);
+  draw();
   $('#openingForm').onsubmit = e => {
     e.preventDefault();
-    if (!rows.length) return toast('ضيف توب واحد على الأقل', 'error');
-    const err = addOpeningBolts(fabricId, rows);
+    if (!bolts.length) return toast('اكتب عدد التوب', 'error');
+    if (bolts.some(b => num(b.length) <= 0)) return toast('اكتب طول التوب', 'error');
+    const err = addOpeningBolts(fabricId, bolts);
     if (err) return toast(err, 'error');
-    toast(`تمت إضافة ${rows.length} توب`); openBoltsModal(fabricId); render();
+    toast(`تمت إضافة ${bolts.length} توب`); openBoltsModal(fabricId); render();
   };
 }
