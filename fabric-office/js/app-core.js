@@ -8,9 +8,11 @@ const routes = {
   fabrics: { title: 'الأقمشة والتوبات', render: v => renderFabrics(v), allow: () => true },
   sales: { title: 'فواتير البيع', render: () => renderInvoices('sale'), allow: () => true },
   purchases: { title: 'فواتير الشراء', render: () => renderInvoices('purchase'), allow: () => can('purchases') },
+  returns: { title: 'المرتجعات', render: v => renderReturns(v), allow: () => can('sales') || can('purchases') },
   customers: { title: 'العملاء', render: () => renderParties('customer'), allow: () => true },
   suppliers: { title: 'الموردين', render: () => renderParties('supplier'), allow: () => can('purchases') || can('parties') },
   ledger: { title: 'الدائنون والمدينون', render: v => renderLedger(v), allow: () => true },
+  treasury: { title: 'الخزنة', render: v => renderTreasury(v), allow: () => can('payments') || can('reports') },
   payments: { title: 'التحصيل والسداد', render: v => renderPayments(v), allow: () => can('payments') },
   expenses: { title: 'المصروفات', render: v => renderExpenses(v), allow: () => can('expenses') },
   reports: { title: 'التقارير', render: v => renderReports(v), allow: () => can('reports') },
@@ -88,7 +90,8 @@ function renderDashboard(view) {
   const stockValue = inStock.reduce((a, b) => a + num(b.length) * num(b.cost), 0);
   const receivable = db.customers.reduce((a, c) => a + Math.max(0, customerBalance(c.id)), 0);
   const payable = db.suppliers.reduce((a, s) => a + Math.max(0, supplierBalance(s.id)), 0);
-  const low = db.fabrics.map(f => ({ f, s: stockOf(f.id) })).filter(x => x.s.count <= num(x.f.minBolts));
+  const low = sortedFabrics().map(f => ({ f, s: stockOf(f.id) })).filter(x => x.s.count <= num(x.f.minBolts));
+  const late = lateCustomers();
   const recent = [...db.sales].sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no).slice(0, 6);
   const debtors = db.customers.map(c => ({ c, b: customerBalance(c.id) })).filter(x => x.b > 0).sort((a, b) => b.b - a.b).slice(0, 6);
 
@@ -101,6 +104,8 @@ function renderDashboard(view) {
       ${statCard('مستحق لنا عند العملاء', money(receivable), 'accent')}
       ${showMoney || can('purchases') ? statCard('مستحق علينا للموردين', money(payable), 'warn') : ''}
       ${statCard('أصناف قاربت على النفاد', low.length, low.length ? 'danger' : '')}
+      ${late.length ? `<a href="#ledger" class="stat-link" data-latetab>${statCard('متأخرين في الدفع', `${late.length} عميل<small>${money(late.reduce((a, x) => a + x.d.overdue, 0))}</small>`, 'danger')}</a>` : ''}
+      ${can('payments') || showMoney ? accountsList().map(a => statCard(`في ${a.name}`, money(accountBalance(a.id)))).join('') : ''}
     </div>
     <div class="grid-2">
       <section class="card">
@@ -112,7 +117,7 @@ function renderDashboard(view) {
       <section class="card">
         <div class="card-head"><h3>تنبيهات المخزن</h3><a href="#fabrics">المخزن</a></div>
         ${low.length ? `<table class="table compact"><thead><tr><th>الصنف</th><th>المتاح</th><th>الحد الأدنى</th></tr></thead><tbody>
-          ${low.map(x => `<tr><td>${esc(x.f.name)} <small class="muted">${esc(x.f.color)}</small></td><td class="text-danger">${boltsLabel(x.s.count, x.s.meters, x.f.unit)}</td><td>${fmt(x.f.minBolts)} توب</td></tr>`).join('')}
+          ${low.map(x => `<tr><td>${esc(fabricLabel(x.f))}</td><td class="text-danger">${boltsLabel(x.s.count, x.s.meters, x.f.unit)}</td><td>${fmt(x.f.minBolts)} توب</td></tr>`).join('')}
         </tbody></table>` : emptyState('كل الأصناف كمياتها كويسة ✅')}
       </section>
       <section class="card">
@@ -122,6 +127,8 @@ function renderDashboard(view) {
         </tbody></table>` : emptyState('مفيش مديونيات على العملاء')}
       </section>
     </div>`;
+  const lt = $('[data-latetab]', view);
+  if (lt) lt.onclick = () => { ledgerState.tab = 'late'; };
 }
 
 /* =====================================================

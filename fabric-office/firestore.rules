@@ -71,6 +71,26 @@ service cloud.firestore {
       allow create: if can('payments');
       allow update, delete: if can('edit');
     }
+    match /returns/{id} {
+      allow read: if active();
+      allow create: if can('sales') || can('purchases');
+      allow update, delete: if can('edit');
+    }
+    match /transfers/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if can('edit');
+    }
+    match /closings/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if isOwner();
+    }
+    match /stocktakes/{id} {
+      allow read: if active();
+      allow create: if can('stock');
+      allow update, delete: if isOwner();
+    }
     match /expenses/{id} {
       allow read: if active();
       allow create: if can('expenses');

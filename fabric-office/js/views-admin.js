@@ -19,8 +19,20 @@ function renderReports(view) {
   const purTotal = purchases.reduce((a, p) => a + p.total, 0);
   const boltsSold = sales.reduce((a, s) => a + s.lines.reduce((b, l) => b + lineBoltCount(l), 0), 0);
   const metersSold = sales.reduce((a, s) => a + s.lines.reduce((b, l) => b + lineMeters(l), 0), 0);
-  const cashIn = sales.reduce((a, s) => a + s.paid, 0) + pays.filter(p => p.party === 'customer').reduce((a, p) => a + p.amount, 0);
-  const cashOut = purchases.reduce((a, p) => a + p.paid, 0) + pays.filter(p => p.party === 'supplier').reduce((a, p) => a + p.amount, 0) + expTotal;
+  const moves = moneyMovements().filter(m => inRange(m.date) && m.kind !== 'transfer' && m.kind !== 'closing');
+  const cashIn = moves.filter(m => m.amount > 0).reduce((a, m) => a + m.amount, 0);
+  const cashOut = moves.filter(m => m.amount < 0).reduce((a, m) => a - m.amount, 0);
+  // المرتجعات: بتقلل المبيعات وتكلفتها
+  const sRet = db.returns.filter(r => r.kind === 'sale' && inRange(r.date));
+  const retValue = sRet.reduce((a, r) => a + r.total, 0);
+  const retCost = sRet.reduce((a, r) => a + r.lines.reduce((x, l) => x + lineCost(l), 0), 0);
+  // عجز الجرد
+  const stLoss = db.stocktakes.filter(t => inRange(t.date)).reduce((a, t) => a + t.items.reduce((x, i) => x + num(i.lossValue), 0), 0);
+  const realProfit = (net - retValue) - (cost - retCost) - expTotal - stLoss;
+  const transportTotal = purchases.reduce((a, p) => a + num(p.transport), 0);
+  const byUser = {};
+  sales.forEach(s => { const u = s.createdBy || '—'; byUser[u] = byUser[u] || { count: 0, total: 0, bolts: 0 }; byUser[u].count++; byUser[u].total += s.total; byUser[u].bolts += s.lines.reduce((a, l) => a + lineBoltCount(l), 0); });
+  const stagnant = stagnantFabrics().slice(0, 12);
 
   const byFabric = {};
   sales.forEach(s => s.lines.forEach(l => {
@@ -52,16 +64,17 @@ function renderReports(view) {
     </div>
     <div id="reportBody">
       <div class="stats">
-        ${statCard('صافي المبيعات', `${money(net)}<small>${boltsSold} توب — ${fmt(metersSold)} متر</small>`)}
-        ${statCard('تكلفة التوبات المباعة', money(cost))}
-        ${statCard('مجمل الربح', money(profit), profit >= 0 ? 'accent' : 'danger')}
+        ${statCard('المبيعات', `${money(net)}<small>${boltsSold} توب — ${fmt(metersSold)} متر</small>`)}
+        ${retValue ? statCard('مرتجعات العملاء', money(retValue), 'warn') : ''}
+        ${statCard('تكلفة التوبات المباعة', `${money(cost - retCost)}<small>شاملة النقل</small>`)}
         ${statCard('المصروفات', money(expTotal), 'warn')}
-        ${statCard('صافي الربح', money(profit - expTotal), profit - expTotal >= 0 ? 'accent' : 'danger')}
-        ${statCard('المشتريات', money(purTotal))}
+        ${stLoss ? statCard('عجز الجرد', money(stLoss), 'danger') : ''}
+        ${statCard('💰 المكسب الحقيقي', money(realProfit), realProfit >= 0 ? 'accent' : 'danger')}
+        ${statCard('المشتريات', `${money(purTotal)}${transportTotal ? `<small>+ نقل ${fmt(transportTotal)}</small>` : ''}`)}
         ${statCard('النقدية الداخلة', money(cashIn))}
         ${statCard('النقدية الخارجة', money(cashOut))}
       </div>
-      <p class="muted summary">عدد فواتير البيع: ${sales.length} — إجمالي قبل الخصم: ${money(gross)} — الخصومات: ${money(discounts)}</p>
+      <p class="muted summary">عدد فواتير البيع: ${sales.length} — إجمالي قبل الخصم: ${money(gross)} — الخصومات: ${money(discounts)} — المكسب الحقيقي = المبيعات − المرتجعات − تكلفة التوب (شاملة النقل) − المصروفات − عجز الجرد</p>
       <div class="grid-2">
         <section class="card">
           <div class="card-head"><h3>الأصناف الأكثر مبيعاً</h3></div>
@@ -75,6 +88,20 @@ function renderReports(view) {
             ${topCust.map(([n, v]) => `<tr><td>${esc(n)}</td><td>${v.bolts}</td><td>${money(v.total)}</td></tr>`).join('')}
           </tbody></table>` : emptyState('لا توجد مبيعات في الفترة')}
         </section>
+        <section class="card">
+          <div class="card-head"><h3>الأصناف الواقفة</h3><span class="muted small">مش مرتبطة بالفترة</span></div>
+          ${stagnant.length ? `<table class="table compact"><thead><tr><th>الصنف</th><th>في المخزن</th><th>آخر بيع</th><th>قاعد من</th></tr></thead><tbody>
+            ${stagnant.map(x => `<tr><td>${esc(fabricLabel(x.f))}</td><td>${x.count} توب</td>
+              <td class="${x.sinceSale === null || x.sinceSale > 60 ? 'text-danger' : x.sinceSale > 30 ? 'text-warn' : ''}">${x.sinceSale === null ? 'متباعش خالص' : `من ${x.sinceSale} يوم`}</td>
+              <td class="muted">${x.oldestDays !== null ? `${x.oldestDays} يوم` : '—'}</td></tr>`).join('')}
+          </tbody></table>` : emptyState('مفيش مخزن')}
+        </section>
+        ${Object.keys(byUser).length > 1 || Backend.isOnline() ? `<section class="card">
+          <div class="card-head"><h3>مبيعات الموظفين</h3></div>
+          ${Object.keys(byUser).length ? `<table class="table compact"><thead><tr><th>الموظف</th><th>فواتير</th><th>توب</th><th>المبيعات</th></tr></thead><tbody>
+            ${Object.entries(byUser).sort((a, b) => b[1].total - a[1].total).map(([n, v]) => `<tr><td>${esc(n)}</td><td>${v.count}</td><td>${v.bolts}</td><td>${money(v.total)}</td></tr>`).join('')}
+          </tbody></table>` : emptyState('لا توجد مبيعات في الفترة')}
+        </section>` : ''}
         <section class="card">
           <div class="card-head"><h3>المصروفات حسب البند</h3></div>
           ${Object.keys(byCat).length ? `<table class="table compact"><thead><tr><th>البند</th><th>المبلغ</th></tr></thead><tbody>
@@ -114,6 +141,28 @@ function renderSettings(view) {
       </form>
     </section>
 
+    <section class="card">
+      <div class="card-head"><h3>سياسة الآجل</h3></div>
+      <form id="creditForm" class="form-grid">
+        ${field('أقصى مبلغ آجل لأي عميل', 'creditLimit', s.creditLimit, { type: 'number', attrs: 'step="any" min="0"', hint: 'العميل مياخدش فاتورة آجل لو هيعدّي المبلغ ده. اكتب 0 لو مفيش حد' })}
+        ${field('أقل مقدم في الفاتورة الآجل (%)', 'minDownPct', s.minDownPct, { type: 'number', attrs: 'step="1" min="0" max="100"', hint: 'مثلاً 50 = يدفع نص الفاتورة على الأقل' })}
+        ${field('القسط الأسبوعي', 'weeklyInstallment', s.weeklyInstallment, { type: 'number', attrs: 'step="any" min="0"', hint: 'المبلغ اللي العميل المفروض يدفعه كل أسبوع' })}
+        <p class="field-full muted small">تقدر تغير الحد والقسط لعميل معين من بيانات العميل نفسه.</p>
+        <div class="form-actions field-full"><button class="btn btn-primary" type="submit">حفظ</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>أماكن الفلوس (الخزنة)</h3></div>
+      <form id="accForm">
+        <table class="table compact"><thead><tr><th>الاسم</th><th>الرصيد وقت بداية السيستم</th><th>الرصيد دلوقتي</th></tr></thead>
+          <tbody>${accountsList().map(a => `<tr data-acc="${esc(a.id)}"><td><input name="name_${esc(a.id)}" value="${esc(a.name)}" aria-label="اسم الحساب"></td>
+            <td><input type="number" step="any" name="open_${esc(a.id)}" value="${num((s.accountOpening || {})[a.id]) || ''}" placeholder="0" aria-label="الرصيد الافتتاحي"></td>
+            <td>${money(accountBalance(a.id))}</td></tr>`).join('')}</tbody></table>
+        <div class="row-actions"><button class="btn btn-primary" type="submit">حفظ</button><button class="btn" type="button" id="addAcc">+ حساب تاني (بنك، إنستاباي...)</button></div>
+      </form>
+    </section>
+
     ${online ? `
     <section class="card">
       <div class="card-head"><h3>الموظفين والصلاحيات</h3><button class="btn btn-primary btn-sm" id="addUser">+ موظف جديد</button></div>
@@ -146,6 +195,25 @@ function renderSettings(view) {
       </div>
     </section>`;
 
+  $('#creditForm').onsubmit = e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    Object.assign(db.settings, { creditLimit: round2(d.creditLimit), minDownPct: Math.min(100, Math.max(0, num(d.minDownPct))), weeklyInstallment: round2(d.weeklyInstallment) });
+    saveDB(); toast('تم حفظ سياسة الآجل'); render();
+  };
+  $('#accForm').onsubmit = e => {
+    e.preventDefault();
+    const d = formData(e.target);
+    db.settings.accounts = accountsList().map(a => ({ id: a.id, name: (d['name_' + a.id] || a.name).trim() || a.name }));
+    db.settings.accountOpening = Object.fromEntries(accountsList().map(a => [a.id, round2(d['open_' + a.id])]));
+    saveDB(); toast('تم الحفظ'); render();
+  };
+  $('#addAcc').onclick = () => {
+    const name = prompt('اسم الحساب الجديد (مثلاً: إنستاباي أو بنك مصر):');
+    if (!name || !name.trim()) return;
+    db.settings.accounts = [...accountsList(), { id: 'acc' + uid(), name: name.trim() }];
+    saveDB(); toast('تم إضافة الحساب'); render();
+  };
   $('#setForm').onsubmit = e => {
     e.preventDefault();
     const d = formData(e.target);

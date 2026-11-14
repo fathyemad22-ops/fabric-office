@@ -612,9 +612,12 @@ function invoiceText(inv) {
   });
   out.push('', `المجموع: ${fmt(invSubtotal(inv))} ${cur}`);
   if (inv.discount) out.push(`الخصم: ${fmt(inv.discount)} ${cur}`);
-  out.push(`*الإجمالي: ${fmt(inv.total)} ${cur}*`, `المدفوع: ${fmt(inv.paid)} ${cur}`);
+  out.push(`*الإجمالي: ${fmt(inv.total)} ${cur}*`, `المدفوع: ${fmt(inv.paid)} ${cur}${inv.paid && inv.paidAccount && inv.paidAccount !== 'cash' ? ` (${accountName(inv.paidAccount)})` : ''}`);
   if (inv.total - inv.paid > 0) out.push(`الباقي: ${fmt(inv.total - inv.paid)} ${cur}`);
-  if (inv.customerId) out.push(`رصيد حسابك الحالي: ${fmt(customerBalance(inv.customerId))} ${cur}`);
+  if (inv.customerId) {
+    out.push(`رصيد حسابك الحالي: ${fmt(customerBalance(inv.customerId))} ${cur}`);
+    if (inv.total - inv.paid > 0) out.push(`القسط الأسبوعي: ${fmt(customerWeekly(byId(db.customers, inv.customerId)))} ${cur}`);
+  }
   if (inv.note) out.push('', inv.note);
   if (db.settings.invoiceNote) out.push('', db.settings.invoiceNote);
   return out.join('\n');
