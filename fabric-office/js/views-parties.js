@@ -34,7 +34,7 @@ function drawPartyList(kind) {
           <td><b>${esc(p.name)}</b></td>
           <td dir="ltr" class="text-end">${esc(p.phone)}</td>
           <td>${esc(p.address)}</td>
-          <td>${b > 0 ? `<span class="${isC ? 'text-accent' : 'text-warn'}">${money(b)} ${isC ? 'عليه' : 'له'}</span>` : b < 0 ? `<span class="muted">${money(-b)} ${isC ? 'له' : 'عليه'}</span>` : '<span class="muted">خالص</span>'}</td>
+          <td>${b > 0 ? `<span class="${isC ? 'text-accent' : 'text-warn'}">${money(b)} ${isC ? 'عليه' : 'له'}</span>` : b < 0 ? `<span class="muted">${money(-b)} ${isC ? 'له' : 'عليه'}</span>` : '<span class="muted">خالص</span>'}${isC && b > 0 ? (() => { const d = customerDue(p.id); return d.overdue > 0 ? ` <span class="badge danger" title="المفروض كان دفع">متأخر ${fmt(d.overdue)}</span>` : ''; })() : ''}</td>
           <td class="actions">
             <button class="btn btn-sm" data-stmt="${p.id}">كشف حساب</button>
             ${can('payments') ? `<button class="btn btn-sm" data-pay="${p.id}">${isC ? 'تحصيل' : 'سداد'}</button>` : ''}
@@ -72,6 +72,8 @@ function openPartyForm(kind, id) {
       ${field('التليفون (واتساب)', 'phone', p.phone, { type: 'tel', attrs: 'dir="ltr"', hint: 'مثلاً 01012345678' })}
       ${field('العنوان', 'address', p.address)}
       ${field('رصيد افتتاحي', 'opening', p.opening, { type: 'number', attrs: 'step="any"', hint: isC ? 'المبلغ اللي على العميل من قبل استخدام النظام' : 'المبلغ اللي علينا للمورد من قبل استخدام النظام' })}
+      ${isC ? `${field('الحد الأقصى للآجل', 'creditLimit', p.creditLimit || '', { type: 'number', attrs: `step="any" min="0" placeholder="${fmt(db.settings.creditLimit)}"`, hint: 'سيبه فاضي عشان ياخد الحد العام من الإعدادات' })}
+      ${field('القسط الأسبوعي', 'weekly', p.weekly || '', { type: 'number', attrs: `step="any" min="0" placeholder="${fmt(db.settings.weeklyInstallment)}"`, hint: 'سيبه فاضي عشان ياخد القسط العام' })}` : ''}
       ${textareaField('ملاحظات', 'notes', p.notes)}
       <div class="form-actions field-full">
         <button class="btn btn-primary" type="submit">حفظ</button>
@@ -82,9 +84,10 @@ function openPartyForm(kind, id) {
     e.preventDefault();
     const d = formData(e.target);
     const rec = { name: d.name.trim(), phone: d.phone.trim(), address: d.address.trim(), opening: round2(d.opening), notes: d.notes.trim() };
+    if (isC) { rec.creditLimit = round2(d.creditLimit) || ''; rec.weekly = round2(d.weekly) || ''; }
     if (!rec.name) return toast('اكتب الاسم', 'error');
     const cur = id ? byId(partyList(kind), id) : null;
-    if (cur) Object.assign(cur, rec); else partyList(kind).push(Object.assign({ id: uid() }, rec));
+    if (cur) Object.assign(cur, rec); else partyList(kind).push(Object.assign({ id: uid(), createdAt: todayISO() }, rec));
     saveDB(); closeModal(); toast('تم الحفظ'); render();
   };
 }
@@ -153,12 +156,13 @@ function renderPayments(view) {
   const box = $('#payList');
   box.innerHTML = list.length ? `
     <div class="table-wrap card"><table class="table">
-      <thead><tr><th>التاريخ</th><th>النوع</th><th>الاسم</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>النوع</th><th>الاسم</th><th>المبلغ</th><th>في</th><th>ملاحظات</th><th></th></tr></thead>
       <tbody>${list.map(p => `<tr>
         <td>${fmtDate(p.date)}</td>
         <td>${p.party === 'customer' ? '<span class="badge ok">تحصيل</span>' : '<span class="badge warn">سداد</span>'}</td>
         <td>${esc(partyName(p.party, p.partyId))}</td>
         <td><b>${money(p.amount)}</b></td>
+        <td class="small">${esc(accountName(p.accountId || 'cash'))}</td>
         <td class="muted">${esc(p.note)}</td>
         <td class="actions">${editable ? `<button class="btn btn-sm" data-edit="${p.id}">تعديل</button><button class="btn btn-sm btn-ghost-danger" data-del="${p.id}">حذف</button>` : ''}</td>
       </tr>`).join('')}</tbody>
@@ -183,6 +187,7 @@ function openPaymentForm(kind, id, presetParty) {
       ${selectField(isC ? 'العميل' : 'المورد', 'partyId', all.map(x => ({ value: x.id, label: x.name })), p.partyId, { required: true, placeholder: '— اختر —' })}
       ${field('التاريخ', 'date', p.date, { type: 'date', required: true })}
       ${field('المبلغ', 'amount', p.amount, { type: 'number', required: true, attrs: 'step="any" min="0.01"' })}
+      ${accountSelectHtml('accountId', p.accountId, isC ? 'استلمتها في' : 'دفعتها من')}
       ${field('ملاحظات', 'note', p.note)}
       <p class="field-full muted" id="balHint"></p>
       <div class="form-actions field-full">
@@ -202,7 +207,7 @@ function openPaymentForm(kind, id, presetParty) {
     const d = formData(form);
     const amount = round2(d.amount);
     if (amount <= 0) return toast('اكتب مبلغ صحيح', 'error');
-    const rec = { party: kind, partyId: d.partyId, date: d.date, amount, note: d.note.trim() };
+    const rec = { party: kind, partyId: d.partyId, date: d.date, amount, accountId: d.accountId, note: d.note.trim() };
     const cur = id ? byId(db.payments, id) : null;
     if (cur) Object.assign(cur, rec); else db.payments.push(Object.assign({ id: uid(), createdBy: currentUser.name }, rec));
     saveDB(); closeModal(); toast('تم الحفظ'); render();
@@ -231,8 +236,8 @@ function renderExpenses(view) {
     </div>
     <div id="expList">${list.length ? `
       <div class="table-wrap card"><table class="table">
-        <thead><tr><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>ملاحظات</th><th></th></tr></thead>
-        <tbody>${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.category)}</td><td><b>${money(x.amount)}</b></td><td class="muted">${esc(x.note)}</td>
+        <thead><tr><th>التاريخ</th><th>البند</th><th>المبلغ</th><th>من</th><th>ملاحظات</th><th></th></tr></thead>
+        <tbody>${list.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.category)}</td><td><b>${money(x.amount)}</b></td><td class="small">${esc(accountName(x.accountId || 'cash'))}</td><td class="muted">${esc(x.note)}</td>
           <td class="actions">${editable ? `<button class="btn btn-sm" data-edit="${x.id}">تعديل</button><button class="btn btn-sm btn-ghost-danger" data-del="${x.id}">حذف</button>` : ''}</td></tr>`).join('')}</tbody>
       </table></div>` : emptyState('لا توجد مصروفات مسجلة')}</div>`;
   $('#addExp').onclick = () => openExpenseForm();
@@ -253,6 +258,7 @@ function openExpenseForm(id) {
       <label class="field"><span>البند <b class="req">*</b></span><input name="category" list="catList" value="${esc(x.category)}" required></label>
       <datalist id="catList">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
       ${field('المبلغ', 'amount', x.amount, { type: 'number', required: true, attrs: 'step="any" min="0.01"' })}
+      ${accountSelectHtml('accountId', x.accountId, 'اتدفع من')}
       ${field('ملاحظات', 'note', x.note)}
       <div class="form-actions field-full">
         <button class="btn btn-primary" type="submit">حفظ</button>
@@ -262,7 +268,7 @@ function openExpenseForm(id) {
   $('#expForm').onsubmit = e => {
     e.preventDefault();
     const d = formData(e.target);
-    const rec = { date: d.date, category: d.category.trim(), amount: round2(d.amount), note: d.note.trim() };
+    const rec = { date: d.date, category: d.category.trim(), amount: round2(d.amount), accountId: d.accountId, note: d.note.trim() };
     if (!rec.category || rec.amount <= 0) return toast('اكمل البيانات بشكل صحيح', 'error');
     const cur = id ? byId(db.expenses, id) : null;
     if (cur) Object.assign(cur, rec); else db.expenses.push(Object.assign({ id: uid(), createdBy: currentUser.name }, rec));
