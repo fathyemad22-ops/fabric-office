@@ -7,6 +7,11 @@ function fabricLabel(f, withStock = false) {
   return parts.join(' — ') + (withStock ? ` (${stockOf(f.id).count} توب)` : '');
 }
 
+function sortedFabrics() {
+  const k = f => `${f.name || ''}|${f.code || ''}|${f.color || ''}`;
+  return [...db.fabrics].sort((a, b) => k(a).localeCompare(k(b), 'ar', { numeric: true }));
+}
+
 /* ---------- الحسابات (كاش / فودافون كاش / ...) ---------- */
 const accountsList = () => db.settings.accounts || [];
 const accountName = id => (accountsList().find(a => a.id === id) || { name: id === 'cash' ? 'الكاش' : '—' }).name;

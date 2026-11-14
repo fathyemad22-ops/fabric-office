@@ -81,14 +81,24 @@ function drawInvoiceList(kind) {
 }
 
 /* ---------- جزء الإجماليات المشترك ---------- */
+function accountSelectHtml(name, value, label = 'اتدفع في') {
+  return `<label class="acc-field"><span>${label}</span><select name="${name}">${accountsList().map(a => `<option value="${esc(a.id)}" ${a.id === (value || 'cash') ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>`;
+}
+
 function totalsHtml(inv, isSale) {
   return `<div class="totals">
     <div><span>المجموع</span><b id="tSub">0</b></div>
     <label><span>الخصم</span><input type="number" name="discount" step="any" min="0" value="${inv ? inv.discount : 0}"></label>
     <div class="grand"><span>الإجمالي</span><b id="tTotal">0</b></div>
     <label><span>المدفوع</span><input type="number" name="paid" step="any" min="0" value="${inv ? inv.paid : ''}" placeholder="0"></label>
-    <button type="button" class="btn btn-sm" id="payAll">دفع كامل</button>
+    <div class="pay-row"><button type="button" class="btn btn-sm" id="payAll">دفع كامل</button>${accountSelectHtml('paidAccount', inv && inv.paidAccount)}</div>
     <div><span>الباقي ${isSale ? 'على العميل' : 'للمورد'}</span><b id="tRem">0</b></div>
+    ${isSale ? '<div class="credit-msg" id="creditMsg" hidden></div>' : `
+    <div class="transport-box">
+      <label><span>مصاريف النقل (دفعتها انت)</span><input type="number" name="transport" step="any" min="0" value="${inv && inv.transport ? inv.transport : ''}" placeholder="0"></label>
+      ${accountSelectHtml('transportAccount', inv && inv.transportAccount, 'النقل اتدفع من')}
+      <small class="muted" id="transportHint">بتتوزع على أمتار الفاتورة وتتحسب في تكلفة التوب</small>
+    </div>`}
   </div>`;
 }
 
@@ -125,6 +135,7 @@ function openSaleForm(id) {
   if (!id && !can('sales')) return;
   if (!db.bolts.some(b => b.status === 'in') && !id) { toast('مفيش توبات في المخزن. سجل التوبات الأول.', 'error'); return; }
   const inv = id ? byId(db.sales, id) : null;
+  if (inv && saleHasReturns(inv.id)) { toast('الفاتورة دي ليها مرتجع، مينفعش تتعدل', 'error'); return; }
   const saleId = inv ? inv.id : null;
   // boltIds: مصفوفة بالترتيب عشان لما العدد يقل نشيل آخر توب اتضاف
   const newLine = () => ({ fabricId: '', price: '', boltIds: [], open: false });
@@ -134,7 +145,7 @@ function openSaleForm(id) {
   // الأقدم في المخزن يتباع الأول
   const available = fid => db.bolts.filter(b => b.fabricId === fid && (b.status === 'in' || (saleId && b.saleId === saleId)))
     .sort((a, b) => String(a.addedAt || '').localeCompare(String(b.addedAt || '')) || String(a.no).localeCompare(String(b.no), 'en', { numeric: true }));
-  const fabricsWithStock = () => db.fabrics.filter(f => available(f.id).length);
+  const fabricsWithStock = () => sortedFabrics().filter(f => available(f.id).length);
 
   openModal(id ? `تعديل فاتورة بيع رقم ${inv.no}` : 'فاتورة بيع جديدة', `
     <form id="invForm">
@@ -191,6 +202,11 @@ function openSaleForm(id) {
     </details>`;
   }
 
+  function lastHint(l) {
+    const last = lastPriceFor(form.party.value, l.fabricId);
+    return last !== null ? `<small class="muted last-price">آخر سعر للعميل: ${fmt(last)}</small>` : '';
+  }
+
   function sumHtml(l) {
     const f = byId(db.fabrics, l.fabricId);
     return `<span>${l.boltIds.length} توب — ${fmt(lineMetersOf(l))} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineSub(l))}</b>`;
@@ -202,12 +218,12 @@ function openSaleForm(id) {
       const avCount = l.fabricId ? available(l.fabricId).length : 0;
       const list = fabricsWithStock();
       const opts = list.concat(f && !list.includes(f) ? [f] : []).map(x =>
-        `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(x.name)}${x.color ? ' - ' + esc(x.color) : ''} (${available(x.id).length} توب)</option>`).join('');
+        `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(fabricLabel(x))} (${available(x.id).length} توب)</option>`).join('');
       return `<div class="inv-line" data-i="${i}">
         <div class="inv-line-head">
           <label class="field grow"><span>الصنف</span><select data-k="fabricId"><option value="">— اختر الصنف —</option>${opts}</select></label>
           ${f ? stepperHtml(l.boltIds.length, avCount) : ''}
-          ${f ? `<label class="field price-field"><span>سعر ال${esc(f.unit)}</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>` : ''}
+          ${f ? `<label class="field price-field"><span>سعر ال${esc(f.unit)}</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}">${lastHint(l)}</label>` : ''}
           <div class="line-sum">${sumHtml(l)}</div>
           ${lines.length > 1 || l.fabricId ? `<button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>` : ''}
         </div>
@@ -236,6 +252,10 @@ function openSaleForm(id) {
     $('#tSub').textContent = fmt(s);
     $('#tTotal').textContent = money(total);
     $('#tRem').textContent = money(round2(total - (form.party.value ? paid : total)));
+    const v = s > 0 ? creditViolation(form.party.value, total, form.party.value ? paid : total, id) : null;
+    const box = $('#creditMsg');
+    box.hidden = !v;
+    if (v) box.innerHTML = `⚠️ ${esc(v)}${isOwner() ? '<label class="check override"><input type="checkbox" id="creditOverride"> تجاوز القاعدة المرة دي (صاحب المكتب)</label>' : ''}`;
   }
 
   function lineFor(fabricId) {
@@ -264,7 +284,9 @@ function openSaleForm(id) {
       const fid = e.target.value;
       if (fid && lines.some(x => x !== l && x.fabricId === fid)) { toast('الصنف ده موجود في سطر تاني', 'error'); e.target.value = l.fabricId; return; }
       l.fabricId = fid; l.boltIds = []; l.open = false;
-      const f = byId(db.fabrics, fid); l.price = f ? f.price : '';
+      const f = byId(db.fabrics, fid);
+      const last = f ? lastPriceFor(form.party.value, fid) : null;
+      l.price = f ? (last !== null ? last : f.price) : '';
       if (f) setCount(l, 1);
       draw();
       const cnt = $(`.inv-line[data-i="${card.dataset.i}"] [data-k=count]`, box);
@@ -320,7 +342,12 @@ function openSaleForm(id) {
   $('#payAll').onclick = () => { form.paid.value = readTotals(form, sub()).total; updateTotals(); };
   form.discount.oninput = updateTotals;
   form.paid.oninput = updateTotals;
-  form.party.onchange = () => { if (form.party.value && !inv) form.paid.value = ''; updateTotals(); };
+  form.party.onchange = () => {
+    if (form.party.value && !inv) form.paid.value = '';
+    // آخر سعر للعميل ده في كل صنف
+    lines.forEach(l => { if (!l.fabricId) return; const last = lastPriceFor(form.party.value, l.fabricId); if (last !== null) l.price = last; });
+    draw();
+  };
   draw();
 
   form.onsubmit = e => {
@@ -338,7 +365,9 @@ function openSaleForm(id) {
     if (!form.party.value) paid = total;
     const err0 = validateTotals(disc, total, paid);
     if (err0) return toast(err0, 'error');
-    const err = saveSale({ customerId: form.party.value, date: form.date.value, discount: disc, paid, note: form.note.value.trim(),
+    const cv = creditViolation(form.party.value, total, paid, id);
+    if (cv && !($('#creditOverride') && $('#creditOverride').checked)) return toast(cv, 'error');
+    const err = saveSale({ customerId: form.party.value, date: form.date.value, discount: disc, paid, paidAccount: form.paidAccount.value, note: form.note.value.trim(),
       lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, boltIds: [...l.boltIds] })) }, id);
     if (err) return toast(err, 'error');
     closeModal();
@@ -417,6 +446,7 @@ function openPurchaseForm(id) {
   const box = $('#purLines');
   const lineMetersOf = l => l.bolts.reduce((a, b) => a + num(b.length), 0);
   const sub = () => round2(lines.reduce((a, l) => a + lineMetersOf(l) * num(l.price), 0));
+  const allMeters = () => lines.reduce((a, l) => a + lineMetersOf(l), 0);
   const sumHtml = l => { const f = byId(db.fabrics, l.fabricId); return `<span>${l.bolts.length} توب — ${fmt(lineMetersOf(l))} ${f ? esc(f.unit) : 'م'}</span><b>${fmt(lineMetersOf(l) * num(l.price))}</b>`; };
 
   function draw() {
@@ -425,7 +455,7 @@ function openPurchaseForm(id) {
       return `<div class="inv-line" data-i="${i}">
         <div class="inv-line-head">
           <label class="field grow"><span>الصنف</span><select data-k="fabricId"><option value="">— اختر الصنف —</option>
-            ${db.fabrics.map(x => `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(x.name)}${x.color ? ' - ' + esc(x.color) : ''}${x.code ? ' (' + esc(x.code) + ')' : ''}</option>`).join('')}</select></label>
+            ${sortedFabrics().map(x => `<option value="${x.id}" ${x.id === l.fabricId ? 'selected' : ''}>${esc(fabricLabel(x))}</option>`).join('')}</select></label>
           ${f ? `<label class="field price-field"><span>سعر ال${esc(f.unit)} (شراء)</span><input type="number" step="any" min="0" data-k="price" value="${esc(l.price)}"></label>` : ''}
           <div class="line-sum">${sumHtml(l)}</div>
           ${lines.length > 1 || l.fabricId ? `<button type="button" class="icon-btn" data-rm="${i}" aria-label="حذف الصنف">✕</button>` : ''}
@@ -456,6 +486,8 @@ function openPurchaseForm(id) {
     $('#tSub').textContent = fmt(s);
     $('#tTotal').textContent = money(total);
     $('#tRem').textContent = money(round2(total - paid));
+    const t = num(form.transport.value); const m = allMeters();
+    $('#transportHint').textContent = t > 0 && m > 0 ? `النقل هيزود تكلفة المتر ${fmt(t / m)} ${db.settings.currency}` : 'بتتوزع على أمتار الفاتورة وتتحسب في تكلفة التوب';
   }
 
   box.addEventListener('change', e => {
@@ -465,7 +497,7 @@ function openPurchaseForm(id) {
       const fid = e.target.value;
       if (fid && lines.some(x => x !== l && x.fabricId === fid)) { toast('الصنف ده موجود في سطر تاني', 'error'); e.target.value = l.fabricId; return; }
       l.fabricId = fid; l.bolts = []; l.open = false;
-      const f = byId(db.fabrics, fid); l.price = f ? f.cost || '' : '';
+      const f = byId(db.fabrics, fid); l.price = f ? f.buyPrice || f.cost || '' : '';
       draw();
       const cnt = $(`.inv-line[data-i="${card.dataset.i}"] [data-k=count]`, box);
       if (cnt) cnt.focus();
@@ -496,12 +528,14 @@ function openPurchaseForm(id) {
   $('#payAll').onclick = () => { form.paid.value = readTotals(form, sub()).total; updateTotals(); };
   form.discount.oninput = updateTotals;
   form.paid.oninput = updateTotals;
+  form.transport.oninput = updateTotals;
   draw();
 
   form.onsubmit = e => {
     e.preventDefault();
     const after = e.submitter && e.submitter.dataset.after;
     if (!form.party.value) return toast('اختر المورد', 'error');
+    if (num(form.transport.value) < 0) return toast('مصاريف النقل غير صحيحة', 'error');
     const used = lines.filter(l => l.fabricId);
     if (!used.length) return toast('ضيف صنف واحد على الأقل', 'error');
     for (const l of used) {
@@ -513,7 +547,8 @@ function openPurchaseForm(id) {
     const { disc, total, paid } = readTotals(form, sub());
     const err0 = validateTotals(disc, total, paid);
     if (err0) return toast(err0, 'error');
-    const err = savePurchase({ supplierId: form.party.value, date: form.date.value, discount: disc, paid, note: form.note.value.trim(),
+    const err = savePurchase({ supplierId: form.party.value, date: form.date.value, discount: disc, paid, paidAccount: form.paidAccount.value,
+      transport: form.transport.value, transportAccount: form.transportAccount.value, note: form.note.value.trim(),
       lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, bolts: l.bolts })) }, id);
     if (err) return toast(err, 'error');
     closeModal();

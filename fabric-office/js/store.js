@@ -182,6 +182,7 @@ function savePurchase(data, existingId) {
   const outLines = lines.map(({ f, price, bolts }) => {
     const landed = round2(price + extra);
     f.cost = landed;
+    f.buyPrice = price;
     return { fabricId: f.id, name: f.name + (f.color ? ` - ${f.color}` : ''), unit: f.unit, price,
       bolts: bolts.map(b => {
         const id = b.boltId || uid();
