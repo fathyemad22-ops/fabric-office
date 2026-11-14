@@ -1,0 +1,100 @@
+rules_version = '2';
+// قواعد الحماية لقاعدة بيانات نظام مكتب القماش
+// انسخ الملف ده كله والصقه في Firestore Database > Rules ثم اضغط Publish
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function me() { return get(userPath()).data; }
+    function active() { return signedIn() && exists(userPath()) && me().active == true; }
+    function isOwner() { return active() && me().role == 'owner'; }
+    function can(p) { return isOwner() || (active() && me().perms.get(p, false) == true); }
+
+    // أول حساب يتعمل هو صاحب المكتب، ومينفعش يتغير بعد كده
+    match /meta/owner {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /meta/settings {
+      allow read: if active();
+      allow write: if isOwner();
+    }
+    match /meta/counters {
+      allow read, write: if active();
+    }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isOwner();
+      allow create: if isOwner() || (
+        signedIn() && request.auth.uid == uid &&
+        request.resource.data.role == 'owner' &&
+        !exists(/databases/$(database)/documents/meta/owner) &&
+        getAfter(/databases/$(database)/documents/meta/owner).data.uid == request.auth.uid
+      );
+      allow update, delete: if isOwner();
+    }
+
+    match /fabrics/{id} {
+      allow read: if active();
+      allow write: if can('stock') || can('purchases');
+    }
+    match /bolts/{id} {
+      allow read: if active();
+      allow write: if can('stock') || can('purchases') || can('sales');
+    }
+    match /customers/{id} {
+      allow read: if active();
+      allow write: if can('parties');
+    }
+    match /suppliers/{id} {
+      allow read: if active();
+      allow write: if can('parties') || can('purchases');
+    }
+    match /sales/{id} {
+      allow read: if active();
+      allow create: if can('sales');
+      allow update, delete: if can('edit');
+    }
+    match /purchases/{id} {
+      allow read: if active();
+      allow create: if can('purchases');
+      allow update, delete: if can('edit') && can('purchases');
+    }
+    match /payments/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if can('edit');
+    }
+    match /adjustments/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if can('edit');
+    }
+    match /returns/{id} {
+      allow read: if active();
+      allow create: if can('sales') || can('purchases');
+      allow update, delete: if can('edit');
+    }
+    match /transfers/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if can('edit');
+    }
+    match /closings/{id} {
+      allow read: if active();
+      allow create: if can('payments');
+      allow update, delete: if isOwner();
+    }
+    match /stocktakes/{id} {
+      allow read: if active();
+      allow create: if can('stock');
+      allow update, delete: if isOwner();
+    }
+    match /expenses/{id} {
+      allow read: if active();
+      allow create: if can('expenses');
+      allow update, delete: if can('edit');
+    }
+  }
+}

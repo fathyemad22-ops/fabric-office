@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام مكتب القماش</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#7a2e4a">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+</head>
+<body>
+  <div class="auth-screen" id="authScreen" hidden></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-mark">🧵</span>
+      <span class="brand-name" id="brandName">مكتب القماش</span>
+    </div>
+    <nav class="nav" id="nav">
+      <a href="#dashboard" data-route="dashboard">🏠 الرئيسية</a>
+      <a href="#fabrics" data-route="fabrics">🧶 الأقمشة والتوبات</a>
+      <a href="#sales" data-route="sales">🧾 فواتير البيع</a>
+      <a href="#purchases" data-route="purchases">📦 فواتير الشراء</a>
+      <a href="#returns" data-route="returns">↩️ المرتجعات</a>
+      <a href="#customers" data-route="customers">👥 العملاء</a>
+      <a href="#suppliers" data-route="suppliers">🏭 الموردين</a>
+      <a href="#ledger" data-route="ledger">⚖️ الدائنون والمدينون</a>
+      <a href="#treasury" data-route="treasury">🗄️ الخزنة</a>
+      <a href="#payments" data-route="payments">💵 التحصيل والسداد</a>
+      <a href="#expenses" data-route="expenses">📉 المصروفات</a>
+      <a href="#reports" data-route="reports">📊 التقارير</a>
+      <a href="#settings" data-route="settings">⚙️ الإعدادات</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="القائمة">☰</button>
+      <h1 id="pageTitle">الرئيسية</h1>
+      <div class="topbar-actions">
+        <div class="user-bar" id="userBar" hidden></div>
+        <button class="btn btn-primary" data-quick="sale">+ فاتورة بيع</button>
+      </div>
+    </header>
+    <main id="view" class="view"><p class="muted loading">جاري التحميل...</p></main>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle"></h2>
+        <button class="icon-btn" id="modalClose" aria-label="إغلاق">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="printArea" class="print-area"></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/money.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app-core.js"></script>
+  <script src="js/views-stock.js"></script>
+  <script src="js/views-invoices.js"></script>
+  <script src="js/views-parties.js"></script>
+  <script src="js/views-ledger.js"></script>
+  <script src="js/views-treasury.js"></script>
+  <script src="js/views-admin.js"></script>
+</body>
+</html>
