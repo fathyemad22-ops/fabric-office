@@ -16,4 +16,11 @@
 
   لو سبتها null، النظام هيشتغل على الجهاز ده بس (بدون إنترنت).
 */
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDB-HQIRxhAZvij-DOzUcQAtRgnEI_G9mE",
+  authDomain: "fabric-office.firebaseapp.com",
+  projectId: "fabric-office",
+  storageBucket: "fabric-office.firebasestorage.app",
+  messagingSenderId: "918660558644",
+  appId: "1:918660558644:web:06e0f632dec9f18f65bf61"
+};
