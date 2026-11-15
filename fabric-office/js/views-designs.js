@@ -3,6 +3,7 @@ const designState = { tab: 'gallery', q: '' };
 const VOTE_PATH = 'vote.html';
 
 function voteLink() {
+  if (db.settings.voteUrl) return db.settings.voteUrl;
   return new URL(VOTE_PATH, location.href.split('#')[0]).href;
 }
 

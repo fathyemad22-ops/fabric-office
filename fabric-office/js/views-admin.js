@@ -137,6 +137,7 @@ function renderSettings(view) {
         ${field('العنوان', 'address', s.address)}
         ${field('العملة', 'currency', s.currency)}
         ${field('رسالة أسفل الفاتورة', 'invoiceNote', s.invoiceNote)}
+        ${field('رابط صفحة التصويت (لو عملتلها رابط لوحده)', 'voteUrl', s.voteUrl || '', { attrs: 'dir="ltr" placeholder="https://..."', hint: 'سيبه فاضي عشان يستخدم الرابط اللي جوه السيستم' })}
         <div class="form-actions field-full"><button class="btn btn-primary" type="submit">حفظ البيانات</button></div>
       </form>
     </section>
@@ -217,7 +218,7 @@ function renderSettings(view) {
   $('#setForm').onsubmit = e => {
     e.preventDefault();
     const d = formData(e.target);
-    Object.assign(db.settings, { shopName: d.shopName.trim() || 'مكتب القماش', phone: d.phone.trim(), address: d.address.trim(), currency: d.currency.trim() || 'ج.م', invoiceNote: d.invoiceNote.trim() });
+    Object.assign(db.settings, { shopName: d.shopName.trim() || 'مكتب القماش', phone: d.phone.trim(), address: d.address.trim(), currency: d.currency.trim() || 'ج.م', invoiceNote: d.invoiceNote.trim(), voteUrl: (d.voteUrl || '').trim() });
     saveDB(); Backend.publishPublicInfo(); toast('تم حفظ البيانات'); render();
   };
 
