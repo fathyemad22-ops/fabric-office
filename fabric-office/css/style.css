@@ -458,3 +458,10 @@ body.auth-mode .sidebar, body.auth-mode .main { display: none; }
 .voter-list { margin: 0; padding-inline-start: 20px; line-height: 2; }
 .link-box { background: #faf8f6; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; word-break: break-all; font-family: ui-monospace, monospace; font-size: 13px; }
 .zoom-img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.who-mobile { display: none; margin-top: 4px; }
+@media (max-width: 600px) {
+  .results-table th:nth-child(4), .results-table td:nth-child(4) { display: none; }
+  .who-mobile { display: inline-block; }
+  .results-table td, .results-table th { padding: 8px 6px; }
+  .design-thumb { width: 44px; height: 44px; }
+}

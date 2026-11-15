@@ -114,7 +114,7 @@ function resultsHtml(ranked, voters) {
     <tbody>${ranked.filter(r => r.voters.length).map((r, i) => `<tr>
       <td><b>${i + 1}</b></td>
       <td><div class="res-design"><div class="design-thumb" data-photo="${r.d.id}" data-zoom="${r.d.id}"></div><b>رسمة ${esc(r.d.code)}</b></div></td>
-      <td style="min-width:140px"><b>${r.voters.length}</b> <small class="muted">من ${voters.length} (${Math.round(r.voters.length / voters.length * 100)}%)</small><div class="bar"><i style="width:${(r.voters.length / max * 100).toFixed(1)}%"></i></div></td>
+      <td style="min-width:140px"><b>${r.voters.length}</b> <small class="muted">من ${voters.length} (${Math.round(r.voters.length / voters.length * 100)}%)</small><div class="bar"><i style="width:${(r.voters.length / max * 100).toFixed(1)}%"></i></div><button class="link-btn small who-mobile" data-who="${r.d.id}">مين اختارها؟</button></td>
       <td class="small"><button class="link-btn" data-who="${r.d.id}">${esc(r.voters.slice(0, 3).map(v => v.name).join('، '))}${r.voters.length > 3 ? ` و${r.voters.length - 3} كمان` : ''}</button></td>
       <td class="actions">${r.d.status === 'active' ? '<span class="badge ok">في الإنتاج</span>' : can('stock') ? `<button class="btn btn-sm btn-primary" data-produce="${r.d.id}">اختيار للإنتاج</button>` : ''}</td>
     </tr>`).join('')}</tbody></table></div>

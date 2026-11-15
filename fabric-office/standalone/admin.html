@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>لوحة الرسومات</title>
+  <meta name="theme-color" content="#7a2e4a">
+  <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzdhMmU0YSIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2Y1ZTllZSIgc3Ryb2tlLXdpZHRoPSIyOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjkgMCkiPjxlbGxpcHNlIGN4PSIyMDAiIGN5PSIyNTYiIHJ4PSI3MCIgcnk9IjE1MCIvPjxwYXRoIGQ9Ik0yMDAgMTA2aDE3MGMzOCAwIDcwIDY3IDcwIDE1MHMtMzIgMTUwLTcwIDE1MEgyMDAiLz48cGF0aCBkPSJNMjAwIDE5NmMyMCAwIDMyIDI3IDMyIDYwcy0xMiA2MC0zMiA2MCIvPjwvZz48L3N2Zz4K" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg: #f6f4f1;
+  --surface: #ffffff;
+  --border: #e4dfd8;
+  --text: #2a2522;
+  --muted: #7a716a;
+  --primary: #7a2e4a;
+  --primary-hover: #63233b;
+  --primary-soft: #f5e9ee;
+  --accent: #1f7a5a;
+  --warn: #b36b00;
+  --danger: #b3261e;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(42, 37, 34, .06), 0 2px 8px rgba(42, 37, 34, .04);
+  --sidebar: 240px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+body.no-scroll { overflow: hidden; }
+a { color: var(--primary); text-decoration: none; }
+code { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); }
+h1, h2, h3 { margin: 0; line-height: 1.3; }
+
+/* ---------- Layout ---------- */
+.sidebar {
+  position: fixed; inset-block: 0; inset-inline-start: 0;
+  width: var(--sidebar);
+  background: #2a1f24;
+  color: #f1e9ec;
+  display: flex; flex-direction: column;
+  z-index: 30;
+  overflow-y: auto;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 20px 20px 16px; font-weight: 700; font-size: 18px; }
+.brand-mark { font-size: 24px; }
+.nav { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
+.nav a {
+  color: #d9ccd1; padding: 10px 12px; border-radius: 8px; font-weight: 600;
+  transition: background-color .15s ease, color .15s ease;
+}
+.nav a:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+.nav a.active { background: var(--primary); color: #fff; }
+
+.main { margin-inline-start: var(--sidebar); min-height: 100vh; }
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px;
+  background: rgba(246, 244, 241, .95);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 { font-size: 20px; flex: 1; }
+.menu-btn { display: none; }
+.view { padding: 24px; max-width: 1280px; }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; padding: 0 16px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text);
+  font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.btn:hover { background: #f1ede8; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-danger:hover { background: #8f1e18; }
+.btn-ghost-danger { color: var(--danger); }
+.btn-ghost-danger:hover { background: #fbeceb; }
+.btn-sm { min-height: 32px; padding: 0 10px; font-size: 13px; }
+.icon-btn {
+  width: 36px; height: 36px; border: 0; border-radius: 8px;
+  background: transparent; cursor: pointer; font-size: 18px; color: inherit;
+}
+.icon-btn:hover { background: rgba(0, 0, 0, .06); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ---------- Cards / Stats ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 16px; margin-bottom: 16px;
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.card-head h3 { font-size: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.grid-2 .card { margin-bottom: 0; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
+  border-inline-start: 4px solid var(--primary);
+}
+.stat.accent { border-inline-start-color: var(--accent); }
+.stat.warn { border-inline-start-color: var(--warn); }
+.stat.danger { border-inline-start-color: var(--danger); }
+.stat-label { color: var(--muted); font-size: 13px; }
+.stat-value { font-size: 20px; font-weight: 700; }
+
+.welcome { max-width: 680px; padding: 32px; }
+.welcome h2 { margin-bottom: 8px; }
+.welcome p { color: var(--muted); }
+
+/* ---------- Toolbar / chips ---------- */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.spacer { flex: 1; }
+.search {
+  flex: 1; min-width: 220px; max-width: 420px; height: 40px;
+  padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
+  font: inherit; background: var(--surface);
+}
+.inline-field { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.inline-field input { height: 40px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--surface); }
+.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.toolbar .chips { margin-bottom: 0; }
+.chip {
+  min-height: 34px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+  font: inherit; font-weight: 600; cursor: pointer; color: var(--text);
+}
+.chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; padding: 0; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: 10px 12px; text-align: start; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table th { background: #faf8f6; font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.table tbody tr:hover { background: #fcfaf8; }
+.table tbody tr:last-child td { border-bottom: 0; }
+.table.compact th, .table.compact td { padding: 8px 10px; }
+.table td.actions { white-space: nowrap; text-align: end; }
+.table td.actions .btn + .btn { margin-inline-start: 4px; }
+.text-end { text-align: end; }
+.summary { margin: 8px 4px 0; font-size: 14px; }
+
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.ok { background: #e3f2ec; color: var(--accent); }
+.badge.warn { background: #fdf0dc; color: var(--warn); }
+.badge.danger { background: #fbe4e2; color: var(--danger); }
+
+.muted { color: var(--muted); }
+.text-danger { color: var(--danger); font-weight: 600; }
+.text-accent { color: var(--accent); font-weight: 600; }
+.text-warn { color: var(--warn); font-weight: 600; }
+
+.bar { height: 4px; background: #efe9e4; border-radius: 4px; margin-top: 4px; }
+.bar i { display: block; height: 100%; background: var(--primary); border-radius: 4px; }
+
+.empty { text-align: center; padding: 32px 16px; color: var(--muted); }
+.empty p { margin: 0 0 12px; }
+
+/* ---------- Forms ---------- */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { font-size: 13px; font-weight: 600; }
+.field small { color: var(--muted); font-size: 12px; }
+.field-full { grid-column: 1 / -1; }
+.req { color: var(--danger); }
+.field input, .field select, .field textarea,
+.lines-table input, .lines-table select, .totals input {
+  width: 100%; min-height: 40px; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 8px;
+  font: inherit; background: #fff; color: var(--text);
+}
+.field textarea { resize: vertical; }
+.form-actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+
+.lines-table { margin: 12px 0 8px; min-width: 620px; }
+.lines-table td { padding: 6px; border-bottom: 0; }
+.lines-table td:first-child { min-width: 280px; }
+.lines-table input { min-width: 90px; }
+.line-total { font-weight: 700; white-space: nowrap; }
+
+.totals {
+  margin: 16px 0; margin-inline-start: auto; max-width: 360px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: #faf8f6; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px;
+}
+.totals > div, .totals > label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.totals input { max-width: 160px; }
+.totals .grand { font-size: 18px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.totals #payAll { align-self: flex-end; }
+
+/* ---------- Modal ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(30, 22, 26, .45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 16px; overflow-y: auto;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  background: var(--surface); border-radius: 12px; width: 100%; max-width: 560px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .2);
+  animation: pop .18s ease-out;
+}
+.modal.wide { max-width: 920px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.modal-head h2 { font-size: 18px; }
+.modal-body { padding: 20px; }
+.confirm-text { margin: 0 0 12px; font-size: 16px; }
+.stmt-total { font-size: 16px; margin: 12px 0; }
+@keyframes pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed; bottom: 24px; inset-inline-start: 50%; transform: translate(50%, 20px);
+  background: #2a2522; color: #fff; padding: 10px 18px; border-radius: 8px;
+  opacity: 0; pointer-events: none; z-index: 60; max-width: 90vw;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.toast.show { opacity: 1; transform: translate(50%, 0); }
+.toast.error { background: var(--danger); }
+
+/* ---------- Print ---------- */
+.print-area { display: none; }
+@media print {
+  body > *:not(.print-area) { display: none !important; }
+  .print-area { display: block; padding: 0; font-size: 13px; color: #000; }
+  .p-head { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+  .p-head h1 { font-size: 22px; }
+  .p-head p { margin: 2px 0; }
+  .p-title { text-align: end; }
+  .p-title h2 { font-size: 18px; }
+  .p-party { margin: 8px 0 12px; }
+  .print-area table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  .print-area th, .print-area td { border: 1px solid #999; padding: 6px 8px; text-align: start; }
+  .print-area th { background: #eee; }
+  .p-totals { width: 50% !important; margin-inline-start: auto; }
+  .p-totals .grand td { font-weight: 700; font-size: 15px; }
+  .p-foot { text-align: center; margin-top: 24px; }
+  .print-area .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .print-area .stat { border: 1px solid #999; padding: 6px; display: flex; flex-direction: column; }
+  .print-area .grid-2 { display: block; }
+  .print-area .bar { display: none; }
+  .print-area .card-head h3 { margin: 12px 0 6px; }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(100%); transition: transform .2s ease; box-shadow: none; }
+  body.nav-open .sidebar { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .3); }
+  .main { margin-inline-start: 0; }
+  .menu-btn { display: inline-block; }
+  .view { padding: 16px; }
+  .topbar { padding: 10px 16px; }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .topbar h1 { font-size: 17px; }
+  .topbar .btn { padding: 0 10px; }
+  .search { min-width: 100%; }
+  .stat-value { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ===== نسخة التوب: إضافات ===== */
+.stat-value small { display: block; font-size: 13px; font-weight: 600; color: var(--muted); }
+.small { font-size: 13px; }
+.hint { background: var(--primary-soft); padding: 8px 12px; border-radius: 8px; margin: 0 0 12px; }
+.loading { padding: 32px; text-align: center; }
+.section-title { font-size: 15px; margin: 20px 0 4px; }
+.compact-stats { grid-template-columns: repeat(3, 1fr); }
+.compact-stats .stat-value { font-size: 17px; }
+[hidden] { display: none !important; }
+
+.bolt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.bolt-card { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; background: #fcfaf8; }
+.bolt-no { font-weight: 700; color: var(--primary); }
+.bolt-len { font-weight: 600; }
+.bolt-actions { display: flex; gap: 4px; margin-top: 4px; }
+.bolt-actions .btn { min-height: 28px; padding: 0 8px; font-size: 12px; }
+.bolt-rows { max-width: 420px; }
+.bolt-rows input { width: 100%; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.bulk { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.bulk input { width: 80px; min-height: 32px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+
+.inv-line { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 12px 0; background: #fff; }
+.inv-line-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.inv-line-head .grow { flex: 1 1 260px; }
+.inv-line-head .field:not(.grow) { flex: 0 1 150px; }
+.inv-line-head select, .inv-line-head input { width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: #fff; }
+.line-sum { display: flex; flex-direction: column; min-width: 140px; padding-bottom: 4px; }
+.line-sum span { font-size: 13px; color: var(--muted); }
+.line-sum b { font-size: 17px; }
+.bolt-pick-head { display: flex; align-items: center; justify-content: space-between; margin: 10px 0 6px; }
+.bolt-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.bolt-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; background: #fff; user-select: none; min-height: 36px; }
+.bolt-chip input { margin: 0; }
+.bolt-chip small { color: var(--muted); }
+.bolt-chip.on { background: var(--primary-soft); border-color: var(--primary); }
+.bolt-chip.on span { color: var(--primary); font-weight: 700; }
+.quick-choices { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+
+.btn-wa { color: #128c4b; border-color: #b9e4cb; }
+.btn-wa:hover { background: #e9f7ef; }
+
+.user-bar { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.user-name { font-weight: 700; }
+.net.on { color: var(--accent); }
+.net.off { color: var(--danger); }
+.topbar-actions { display: flex; align-items: center; gap: 12px; }
+
+.perms { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.perms legend { font-weight: 700; padding: 0 6px; }
+
+body.auth-mode .sidebar, body.auth-mode .main { display: none; }
+.auth-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 400px; padding: 28px; text-align: center; }
+.auth-card h1 { font-size: 22px; margin: 6px 0 16px; }
+.brand-mark.big { font-size: 44px; }
+.auth-form { display: flex; flex-direction: column; gap: 12px; text-align: start; }
+.auth-form .btn { width: 100%; }
+.auth-first { margin-top: 20px; text-align: start; }
+.auth-first summary { cursor: pointer; color: var(--primary); font-weight: 600; margin-bottom: 12px; }
+.auth-msg { display: none; background: #fbe4e2; color: var(--danger); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+.auth-msg.show { display: block; }
+
+@media print {
+  .p-subtotal td { background: #f5f5f5; font-weight: 700; }
+}
+@media (max-width: 600px) {
+  .user-bar .user-name, .user-bar .net { display: none; }
+  .inv-line-head .field:not(.grow) { flex: 1 1 120px; }
+  .compact-stats { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* ===== مدين ودائن ===== */
+.side { font-weight: 700; }
+.side.debit { color: var(--accent); }
+.side.credit { color: var(--warn); }
+.stmt-table td.num-debit, .stmt-table td.num-credit { white-space: nowrap; }
+.stmt-table tfoot td { border-top: 2px solid var(--border); background: #faf8f6; }
+.side-pick { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.side-pick legend { font-weight: 700; padding: 0 6px; font-size: 13px; }
+.side-pick p { flex-basis: 100%; margin: 4px 0 0; }
+.side-opt { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-weight: 700; min-height: 40px; }
+.side-opt.debit:has(input:checked) { background: #e3f2ec; border-color: var(--accent); color: var(--accent); }
+.side-opt.credit:has(input:checked) { background: #fdf0dc; border-color: var(--warn); color: var(--warn); }
+.balance-preview { background: #faf8f6; border-radius: 8px; padding: 8px 12px; margin: 0; }
+.balance-preview:empty { display: none; }
+@media print { .stmt-table tfoot td { font-weight: 700; background: #eee; } }
+
+/* ===== شكل أبسط للتوبات ===== */
+.stepper { display: inline-flex; align-items: stretch; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; height: 40px; }
+.stepper input { width: 64px; border: 0 !important; border-radius: 0 !important; text-align: center; font-weight: 700; font-size: 16px; padding: 0 4px !important; min-height: 0 !important; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button, .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.step-btn { width: 40px; border: 0; background: #faf8f6; font-size: 20px; cursor: pointer; color: var(--primary); font-family: inherit; }
+.step-btn:hover { background: var(--primary-soft); }
+.qty-field, .price-field, .len-field { flex: 0 0 auto !important; }
+.price-field input, .len-field input { width: 120px !important; }
+.avail-note { margin-top: 6px; }
+.bolt-details { margin-top: 8px; }
+.bolt-details > summary { cursor: pointer; font-size: 13px; color: var(--muted); list-style: none; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bolt-details > summary::-webkit-details-marker { display: none; }
+.bolt-details > summary .link { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.bolt-details[open] > summary { margin-bottom: 8px; }
+.bolt-details[open] > summary .link { display: none; }
+.bolt-editor { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 10px; }
+.row-actions.between { justify-content: space-between; align-items: center; }
+.quick-inline { display: inline-flex; align-items: center; gap: 8px; }
+.quick-inline input { width: 120px; min-height: 36px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.bolt-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.bolt-summary div { background: #faf8f6; border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; display: flex; flex-direction: column; }
+.bolt-summary b { font-size: 24px; color: var(--primary); line-height: 1.2; }
+.bolt-summary span { font-size: 13px; color: var(--muted); }
+.add-bolts { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; }
+.add-bolts .section-title { margin-top: 0; }
+.add-total { margin: 10px 0 0; }
+.bolt-list { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.bolt-list > summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.bolt-list[open] > summary { margin-bottom: 8px; }
+@media (max-width: 600px) {
+  .inv-line-head .grow { flex-basis: 100%; }
+  .price-field input, .len-field input { width: 100px !important; }
+  .line-sum { min-width: 0; flex: 1; }
+}
+.inv-line { position: relative; }
+.inv-line-head > .icon-btn[data-rm] { position: absolute; top: 6px; inset-inline-end: 6px; width: 30px; height: 30px; font-size: 15px; color: var(--muted); }
+.inv-line-head { padding-inline-end: 28px; }
+.bolt-details[open] > summary { display: none; }
+@media (max-width: 600px) {
+  .inv-line-head { padding-inline-end: 0; }
+  .inv-line-head .grow { padding-inline-end: 30px; }
+  .line-sum { flex: 1 1 100%; flex-direction: row; justify-content: space-between; align-items: center; background: #faf8f6; border-radius: 8px; padding: 8px 12px; }
+  .qty-field, .price-field, .len-field { flex: 1 1 0 !important; }
+  .price-field input, .len-field input { width: 100% !important; }
+  .stepper { width: 100%; }
+  .stepper input { flex: 1; width: auto; }
+}
+
+/* ===== النسخة الكاملة: خزنة، آجل، ألوان، مرتجعات ===== */
+.material-card .card-head h3 { font-size: 18px; }
+.color-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.color-pill { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 12px; min-height: 34px; font: inherit; font-size: 14px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; color: var(--text); }
+.color-pill b { background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: 0 8px; font-size: 13px; }
+.color-pill:hover { border-color: var(--primary); }
+.color-pill.low b { background: #fbe4e2; color: var(--danger); }
+.color-pill.hit { outline: 2px solid var(--accent); }
+.color-pill.add { color: var(--primary); border-style: dashed; }
+.colors-table input { width: 100%; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.modal-tools { margin: 0 0 12px; align-items: center; }
+.pay-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.acc-field { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.acc-field select { min-height: 36px; border: 1px solid var(--border); border-radius: 8px; padding: 2px 8px; font: inherit; background: #fff; }
+.transport-box { border-top: 1px dashed var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.transport-box label:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.credit-msg { background: #fbe4e2; color: var(--danger); border-radius: 8px; padding: 8px 12px; font-size: 14px; font-weight: 600; }
+.credit-msg .override { display: flex; margin-top: 6px; color: var(--text); font-weight: 400; }
+.last-price { display: block; margin-top: 2px; }
+.stat-link { color: inherit; display: block; }
+.stat-link .stat { height: 100%; }
+.closing-table input { width: 130px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.stocktake-table input { width: 90px; min-height: 34px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font: inherit; text-align: center; }
+.ret-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin: 10px 0; }
+.ret-head { margin-bottom: 8px; }
+.wa-progress { margin-bottom: 12px; font-size: 14px; }
+.wa-progress .bar { height: 6px; }
+.wa-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fcfaf8; }
+.wa-to { margin-bottom: 8px; }
+.wa-text { white-space: pre-wrap; font-family: inherit; margin: 0; font-size: 14px; background: #fff; border-radius: 8px; padding: 10px; border: 1px solid var(--border); max-height: 260px; overflow: auto; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.color-pill { white-space: nowrap; }
+.credit-msg .override { gap: 8px; align-items: center; }
+.credit-msg .override input { width: auto; min-height: 0; }
+
+/* ===== الرسومات والتصويت ===== */
+.ds-search { margin-bottom: 12px; max-width: 280px; }
+.design-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.design-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+.design-card.is-active { border-color: var(--accent); }
+.design-photo, .design-thumb { background: #efe9e4 center/cover no-repeat; cursor: zoom-in; }
+.design-photo { aspect-ratio: 1; }
+.design-photo:not(.loaded)::after, .design-thumb:not(.loaded)::after { content: ''; display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #efe9e4, #f7f3ef, #efe9e4); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.design-photo.missing::after { animation: none; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.design-info { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 0; }
+.design-status { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px 8px; }
+.small-icon { width: 28px; height: 28px; font-size: 16px; }
+.res-design { display: flex; align-items: center; gap: 10px; }
+.design-thumb { width: 56px; height: 56px; border-radius: 8px; flex: 0 0 auto; overflow: hidden; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--primary); font: inherit; cursor: pointer; text-align: start; text-decoration: underline; text-underline-offset: 3px; }
+.voter-list { margin: 0; padding-inline-start: 20px; line-height: 2; }
+.link-box { background: #faf8f6; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; word-break: break-all; font-family: ui-monospace, monospace; font-size: 13px; }
+.zoom-img { width: 100%; height: auto; border-radius: 8px; display: block; }
+.who-mobile { display: none; margin-top: 4px; }
+@media (max-width: 600px) {
+  .results-table th:nth-child(4), .results-table td:nth-child(4) { display: none; }
+  .who-mobile { display: inline-block; }
+  .results-table td, .results-table th { padding: 8px 6px; }
+  .design-thumb { width: 44px; height: 44px; }
+}
+
+</style>
+  <style>
+    .a-top { background: #2a1f24; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 20; }
+    .a-top h1 { font-size: 18px; flex: 1; margin: 0; }
+    .a-top .btn { min-height: 34px; }
+    .a-wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .a-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div id="app"><p class="loading muted">جاري التحميل...</p></div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><h2 id="modalTitle"></h2><button class="icon-btn" id="modalClose" aria-label="إغلاق">✕</button></div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+/*
+  ربط النظام أونلاين (اختياري)
+  ----------------------------------
+  لو عايز تشغل النظام من أكتر من جهاز وبحسابات للموظفين:
+  اتبع الخطوات في ملف SETUP_ONLINE.md والصق بيانات Firebase هنا بدل null.
+
+  مثال:
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIza...",
+    authDomain: "my-shop.firebaseapp.com",
+    projectId: "my-shop",
+    storageBucket: "my-shop.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abc123"
+  };
+
+  لو سبتها null، النظام هيشتغل على الجهاز ده بس (بدون إنترنت).
+*/
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDB-HQIRxhAZvij-DOzUcQAtRgnEI_G9mE",
+  authDomain: "fabric-office.firebaseapp.com",
+  projectId: "fabric-office",
+  storageBucket: "fabric-office.firebasestorage.app",
+  messagingSenderId: "918660558644",
+  appId: "1:918660558644:web:06e0f632dec9f18f65bf61"
+};
+
+</script>
+  <script>
+/* ========== لوحة الرسومات (منفصلة عن السيستم) ==========
+   رفع صور الرسومات، تعديلها، ومتابعة تصويت العملاء */
+(function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const LOGIN_DOMAIN = '@fabric-office.app';
+  const toEmail = l => (l.includes('@') ? l.trim() : l.trim().toLowerCase() + LOGIN_DOMAIN);
+  const state = { tab: 'gallery', designs: [], votes: [], q: '' };
+  let api;
+
+  /* ---------- أدوات ---------- */
+  function toast(msg, type = 'ok') {
+    const t = $('#toast'); t.textContent = msg; t.className = `toast show ${type}`;
+    clearTimeout(toast.t); toast.t = setTimeout(() => { t.className = 'toast'; }, 3000);
+  }
+  function openModal(title, html) { $('#modalTitle').textContent = title; $('#modalBody').innerHTML = html; $('#modalBackdrop').hidden = false; }
+  function closeModal() { $('#modalBackdrop').hidden = true; $('#modalBody').innerHTML = ''; }
+  function confirmBox(msg, label = 'حذف') {
+    return new Promise(res => {
+      openModal('تأكيد', `<p class="confirm-text">${esc(msg)}</p><div class="form-actions"><button class="btn btn-danger" id="cY">${esc(label)}</button><button class="btn" id="cN">إلغاء</button></div>`);
+      $('#cY').onclick = () => { closeModal(); res(true); };
+      $('#cN').onclick = () => { closeModal(); res(false); };
+    });
+  }
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  const voteLink = () => new URL('./', location.href.split('#')[0].split('?')[0]).href;
+  function openWhatsApp(text) { window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener'); }
+
+  function compressImage(file, max = 900, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+      img.src = url;
+    });
+  }
+
+  /* ---------- البيانات: Firebase (أو الجهاز نفسه للتجربة) ---------- */
+  async function firebaseApi(cfg) {
+    const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    await loadScript(base + 'firebase-app-compat.js');
+    await loadScript(base + 'firebase-auth-compat.js');
+    await loadScript(base + 'firebase-firestore-compat.js');
+    firebase.initializeApp(cfg);
+    const fs = firebase.firestore();
+    const auth = firebase.auth();
+    const cache = new Map();
+    const self = {
+      needsLogin: true,
+      signingUp: false,
+      currentUser: () => auth.currentUser,
+      onAuth: cb => auth.onAuthStateChanged(cb),
+      signIn: (l, p) => auth.signInWithEmailAndPassword(toEmail(l), p),
+      signOut: () => auth.signOut(),
+      async signupOwner(name, login, password) {
+        self.signingUp = true;
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(toEmail(login), password);
+          const u = cred.user;
+          try {
+            const b = fs.batch();
+            b.set(fs.doc('meta/owner'), { uid: u.uid });
+            b.set(fs.doc('users/' + u.uid), { name, email: u.email, login: login.trim(), role: 'owner', active: true, perms: {}, createdAt: Date.now() });
+            await b.commit();
+          } catch (e) { await u.delete().catch(() => {}); throw new Error('owner-exists'); }
+        } finally { self.signingUp = false; }
+      },
+      async canManage(user) {
+        const s = await fs.collection('users').doc(user.uid).get();
+        if (!s.exists) return false;
+        const d = s.data();
+        return d.active && (d.role === 'owner' || (d.perms && d.perms.stock));
+      },
+      watch(onDesigns, onVotes) {
+        fs.collection('designs').onSnapshot(s => onDesigns(s.docs.map(d => Object.assign({ id: d.id }, d.data()))));
+        fs.collection('votes').onSnapshot(s => onVotes(s.docs.map(d => Object.assign({ id: d.id }, d.data()))), () => onVotes([]));
+      },
+      async addDesign(d, photo) { await fs.collection('designPhotos').doc(d.id).set({ data: photo }); cache.set(d.id, photo); await fs.collection('designs').doc(d.id).set(d); },
+      updateDesign: (id, data) => fs.collection('designs').doc(id).update(data),
+      async deleteDesign(id) { await fs.collection('designs').doc(id).delete(); await fs.collection('designPhotos').doc(id).delete(); cache.delete(id); },
+      async photo(id) {
+        if (cache.has(id)) return cache.get(id);
+        const s = await fs.collection('designPhotos').doc(id).get();
+        const data = s.exists ? s.data().data : ''; cache.set(id, data); return data;
+      },
+      async clearVotes(ids) { for (let i = 0; i < ids.length; i += 400) { const b = fs.batch(); ids.slice(i, i + 400).forEach(id => b.delete(fs.collection('votes').doc(id))); await b.commit(); } },
+    };
+    return self;
+  }
+
+  function localApi() {
+    const KEY = 'fabricOffice.v2';
+    const read = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } };
+    const write = d => localStorage.setItem(KEY, JSON.stringify(d));
+    let cbs = null;
+    const emit = () => { if (cbs) { const d = read(); cbs[0](d.designs || []); cbs[1](d.votes || []); } };
+    return {
+      needsLogin: false,
+      watch(a, b) { cbs = [a, b]; emit(); window.addEventListener('storage', emit); },
+      async addDesign(d, photo) { localStorage.setItem('fabricOffice.photo.' + d.id, photo); const x = read(); x.designs = x.designs || []; x.designs.push(d); write(x); emit(); },
+      async updateDesign(id, data) { const x = read(); Object.assign((x.designs || []).find(d => d.id === id) || {}, data); write(x); emit(); },
+      async deleteDesign(id) { const x = read(); x.designs = (x.designs || []).filter(d => d.id !== id); write(x); localStorage.removeItem('fabricOffice.photo.' + id); emit(); },
+      async photo(id) { return localStorage.getItem('fabricOffice.photo.' + id) || ''; },
+      async clearVotes() { const x = read(); x.votes = []; write(x); emit(); },
+    };
+  }
+
+  /* ---------- النتايج ---------- */
+  function results() {
+    const latest = {};
+    state.votes.forEach(v => {
+      const key = String(v.phone || '').replace(/\D/g, '') || String(v.name || '').trim().toLowerCase();
+      if (!latest[key] || (v.createdAt || 0) > (latest[key].createdAt || 0)) latest[key] = v;
+    });
+    const voters = Object.values(latest);
+    const counts = {};
+    voters.forEach(v => (v.designIds || []).forEach(id => { (counts[id] = counts[id] || []).push(v); }));
+    const ranked = state.designs.map(d => ({ d, voters: counts[d.id] || [] }))
+      .sort((a, b) => b.voters.length - a.voters.length || String(a.d.code).localeCompare(String(b.d.code), 'en', { numeric: true }));
+    return { voters, ranked };
+  }
+
+  /* ---------- الدخول ---------- */
+  function showLogin(msg = '') {
+    $('#app').innerHTML = `<div class="a-login"><div class="auth-card card">
+      <div class="brand-mark big">🎨</div><h1>لوحة الرسومات</h1>
+      <div class="auth-msg ${msg ? 'show' : ''}" id="lMsg">${esc(msg)}</div>
+      <form id="lForm" class="auth-form">
+        <label class="field"><span>اسم المستخدم</span><input name="login" required dir="ltr" autocomplete="username"></label>
+        <label class="field"><span>كلمة السر</span><input name="password" type="password" required autocomplete="current-password"></label>
+        <button class="btn btn-primary" type="submit">دخول</button>
+      </form>
+      <details class="auth-first"><summary>أول مرة؟ اعمل حسابك</summary>
+        <form id="sForm" class="auth-form">
+          <label class="field"><span>اسمك</span><input name="name" required></label>
+          <label class="field"><span>اسم مستخدم (بالإنجليزي)</span><input name="login" required dir="ltr" autocomplete="username"></label>
+          <label class="field"><span>كلمة سر (6 حروف أو أكتر)</span><input name="password" type="password" minlength="6" required autocomplete="new-password"></label>
+          <button class="btn" type="submit">إنشاء الحساب</button>
+          <small class="muted">لو عملت حساب في سيستم المكتب قبل كده، ادخل بيه فوق علطول.</small>
+        </form></details>
+    </div></div>`;
+    const setMsg = m => { const e = $('#lMsg'); e.textContent = m; e.classList.toggle('show', !!m); };
+    const errText = e => ({
+      'auth/invalid-credential': 'اسم المستخدم أو كلمة السر غلط', 'auth/wrong-password': 'كلمة السر غلط', 'auth/user-not-found': 'الحساب ده مش موجود',
+      'auth/email-already-in-use': 'اسم المستخدم ده مستخدم قبل كده', 'auth/weak-password': 'كلمة السر لازم 6 حروف على الأقل',
+      'auth/invalid-email': 'اسم المستخدم لازم يكون حروف إنجليزي وأرقام', 'auth/network-request-failed': 'مفيش اتصال بالإنترنت',
+      'auth/operation-not-allowed': 'لازم تفعّل الدخول بـ Email/Password في Firebase',
+    }[e.code] || (e.message === 'owner-exists' ? 'فيه حساب صاحب مكتب متعمل قبل كده — ادخل بيه' : 'حصلت مشكلة، جرب تاني'));
+    $('#lForm').onsubmit = async e => { e.preventDefault(); setMsg(''); try { await api.signIn(e.target.login.value, e.target.password.value); } catch (err) { setMsg(errText(err)); } };
+    $('#sForm').onsubmit = async e => {
+      e.preventDefault(); setMsg('');
+      try { await api.signupOwner(e.target.name.value.trim(), e.target.login.value, e.target.password.value); await handleUser(api.currentUser()); } catch (err) { setMsg(errText(err)); }
+    };
+  }
+
+  /* ---------- اللوحة ---------- */
+  function shell() {
+    $('#app').innerHTML = `
+      <header class="a-top"><h1>🎨 لوحة الرسومات</h1>
+        <a class="btn btn-sm" href="${esc(voteLink())}" target="_blank">صفحة العملاء ↗</a>
+        ${api.needsLogin ? '<button class="btn btn-sm" id="logout">خروج</button>' : ''}</header>
+      <main class="a-wrap" id="main"></main>`;
+    if ($('#logout')) $('#logout').onclick = async () => { await api.signOut(); location.reload(); };
+    api.watch(d => { state.designs = d; draw(); }, v => { state.votes = v; draw(); });
+  }
+
+  let io;
+  function lazy(root) {
+    if (io) io.disconnect();
+    io = new IntersectionObserver(en => en.forEach(async x => {
+      if (!x.isIntersecting) return; io.unobserve(x.target);
+      const data = await api.photo(x.target.dataset.photo).catch(() => '');
+      if (data) { x.target.style.backgroundImage = `url("${data}")`; x.target.classList.add('loaded'); } else x.target.classList.add('missing');
+    }), { rootMargin: '200px' });
+    $$('[data-photo]', root).forEach(el => io.observe(el));
+  }
+
+  function draw() {
+    const main = $('#main'); if (!main) return;
+    const { voters, ranked } = results();
+    const count = id => (ranked.find(r => r.d.id === id) || { voters: [] }).voters.length;
+    const inVote = state.designs.filter(d => d.status !== 'active').length;
+    const q = state.q.trim().toLowerCase();
+    const list = state.designs.filter(d => !q || String(d.code).toLowerCase().includes(q))
+      .sort((a, b) => String(a.code).localeCompare(String(b.code), 'en', { numeric: true }));
+    const max = Math.max(1, ranked[0] ? ranked[0].voters.length : 1);
+    main.innerHTML = `
+      <div class="stats">
+        <div class="stat"><span class="stat-label">الرسومات</span><span class="stat-value">${state.designs.length}<small>${inVote} ظاهرين للعملاء</small></span></div>
+        <div class="stat accent"><span class="stat-label">عملاء صوّتوا</span><span class="stat-value">${voters.length}</span></div>
+        <div class="stat"><span class="stat-label">الأكتر طلباً</span><span class="stat-value">${ranked[0] && ranked[0].voters.length ? `رسمة ${esc(ranked[0].d.code)}<small>${ranked[0].voters.length} صوت</small>` : '—'}</span></div>
+      </div>
+      <div class="toolbar">
+        <div class="chips" style="margin:0">
+          <button class="chip ${state.tab === 'gallery' ? 'active' : ''}" data-tab="gallery">الرسومات</button>
+          <button class="chip ${state.tab === 'results' ? 'active' : ''}" data-tab="results">النتايج</button>
+        </div>
+        <span class="spacer"></span>
+        <button class="btn btn-wa" id="share">إرسال رابط التصويت</button>
+        <label class="btn btn-primary">+ رفع صور<input type="file" id="upload" accept="image/*" multiple hidden></label>
+      </div>
+      ${state.tab === 'gallery' ? (state.designs.length ? `
+        <input type="search" class="search ds-search" id="q" placeholder="ابحث برقم الرسمة..." value="${esc(state.q)}">
+        <div class="design-grid">${list.map(d => `
+          <div class="design-card ${d.status === 'active' ? 'is-active' : ''}">
+            <div class="design-photo" data-photo="${esc(d.id)}" data-zoom="${esc(d.id)}"></div>
+            <div class="design-info"><b>رسمة ${esc(d.code)}</b><span class="${count(d.id) ? 'text-accent' : 'muted'} small">❤️ ${count(d.id)}</span></div>
+            <div class="design-status">${d.status === 'active' ? '<span class="badge ok">اتختارت</span>' : '<span class="badge warn">في التصويت</span>'}
+              <button class="icon-btn small-icon" data-menu="${esc(d.id)}" aria-label="خيارات">⋯</button></div>
+          </div>`).join('')}</div>`
+        : `<div class="empty"><p>لسه مفيش رسومات.</p><p class="muted">دوس "+ رفع صور" واختار صور الرسومات كلها مرة واحدة.<br>اسم كل صورة بيبقى رقم الرسمة، وتقدر تغيره بعدين من ⋯</p></div>`)
+      : (voters.length ? `
+        <div class="table-wrap card"><table class="table results-table">
+          <thead><tr><th>#</th><th>الرسمة</th><th>الأصوات</th><th>اللي اختاروها</th><th></th></tr></thead>
+          <tbody>${ranked.filter(r => r.voters.length).map((r, i) => `<tr>
+            <td><b>${i + 1}</b></td>
+            <td><div class="res-design"><div class="design-thumb" data-photo="${esc(r.d.id)}" data-zoom="${esc(r.d.id)}"></div><b>رسمة ${esc(r.d.code)}</b></div></td>
+            <td style="min-width:130px"><b>${r.voters.length}</b> <small class="muted">من ${voters.length} (${Math.round(r.voters.length / voters.length * 100)}%)</small><div class="bar"><i style="width:${(r.voters.length / max * 100).toFixed(1)}%"></i></div><button class="link-btn small who-mobile" data-who="${esc(r.d.id)}">مين اختارها؟</button></td>
+            <td class="small"><button class="link-btn" data-who="${esc(r.d.id)}">${esc(r.voters.slice(0, 3).map(v => v.name).join('، '))}${r.voters.length > 3 ? ` و${r.voters.length - 3} كمان` : ''}</button></td>
+            <td class="actions">${r.d.status === 'active' ? '<span class="badge ok">اتختارت</span>' : `<button class="btn btn-sm btn-primary" data-pick="${esc(r.d.id)}">اختيار ✓</button>`}</td>
+          </tr>`).join('')}</tbody></table></div>
+        <div class="row-actions"><span class="muted small">${ranked.filter(r => !r.voters.length).length} رسمة محدش اختارها. لو عميل صوّت أكتر من مرة، آخر اختيار ليه بس هو اللي بيتحسب.</span>
+          <span class="spacer"></span><button class="btn btn-sm btn-ghost-danger" id="clearVotes">مسح كل الأصوات وبدء تصويت جديد</button></div>`
+        : '<div class="empty"><p>لسه محدش صوّت.</p><p class="muted">ابعت رابط التصويت للعملاء من زرار "إرسال رابط التصويت".</p></div>')}
+      <p class="muted summary">رابط العملاء: <a href="${esc(voteLink())}" target="_blank" dir="ltr">${esc(voteLink())}</a></p>`;
+    lazy(main);
+    if ($('#q')) $('#q').oninput = e => { state.q = e.target.value; const p = e.target.selectionStart; draw(); const s = $('#q'); s.focus(); s.setSelectionRange(p, p); };
+    $('#upload').onchange = e => upload([...e.target.files]);
+    $('#share').onclick = share;
+    if ($('#clearVotes')) $('#clearVotes').onclick = async () => {
+      if (!(await confirmBox(`مسح كل الأصوات (${state.votes.length})؟ مش هتقدر ترجعها.`, 'مسح الأصوات'))) return;
+      await api.clearVotes(state.votes.map(v => v.id)); toast('تم مسح الأصوات');
+    };
+  }
+
+  async function upload(files) {
+    const imgs = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+    if (!imgs.length) return;
+    let done = 0, failed = 0;
+    toast(`جاري رفع ${imgs.length} صورة...`);
+    for (const f of imgs) {
+      try {
+        const photo = await compressImage(f);
+        let code = f.name.replace(/\.[^.]+$/, '').trim() || String(state.designs.length + 1);
+        if (state.designs.some(d => d.code === code)) code = `${code}-${done + 1}`;
+        await api.addDesign({ id: uid(), code, status: 'sample', createdAt: Date.now() }, photo);
+        done++;
+        if (done % 5 === 0) toast(`اترفع ${done} من ${imgs.length}`);
+      } catch (e) { failed++; }
+    }
+    toast(`تم رفع ${done} رسمة${failed ? ` — ${failed} مااترفعتش` : ''}`, failed ? 'error' : 'ok');
+  }
+
+  async function zoom(id) {
+    const d = state.designs.find(x => x.id === id);
+    openModal(`رسمة ${d ? d.code : ''}`, '<p class="muted">جاري التحميل...</p>');
+    const data = await api.photo(id);
+    if (!$('#modalBackdrop').hidden) $('#modalBody').innerHTML = data ? `<img src="${data}" class="zoom-img" alt="">` : '<p>الصورة مش موجودة</p>';
+  }
+
+  function menu(id) {
+    const d = state.designs.find(x => x.id === id);
+    openModal(`رسمة ${d.code}`, `
+      <form id="mForm" class="form-grid">
+        <label class="field"><span>رقم / اسم الرسمة</span><input name="code" value="${esc(d.code)}" required></label>
+        <label class="field"><span>الحالة</span><select name="status">
+          <option value="sample" ${d.status !== 'active' ? 'selected' : ''}>في التصويت (ظاهرة للعملاء)</option>
+          <option value="active" ${d.status === 'active' ? 'selected' : ''}>اتختارت (مخفية من التصويت)</option></select></label>
+        <div class="form-actions field-full"><button class="btn btn-primary" type="submit">حفظ</button>
+          <button class="btn btn-ghost-danger" type="button" id="mDel">حذف الرسمة</button><button class="btn" type="button" id="mCancel">إلغاء</button></div>
+      </form>`);
+    $('#mCancel').onclick = closeModal;
+    $('#mForm').onsubmit = async e => {
+      e.preventDefault();
+      await api.updateDesign(id, { code: e.target.code.value.trim() || d.code, status: e.target.status.value });
+      closeModal(); toast('تم الحفظ');
+    };
+    $('#mDel').onclick = async () => {
+      if (!(await confirmBox(`حذف رسمة ${d.code} وصورتها؟`))) return;
+      await api.deleteDesign(id); toast('تم الحذف');
+    };
+  }
+
+  function share() {
+    const link = voteLink();
+    const text = `أهلاً 👋\nعندنا رسومات قماش جديدة وعايزين رأيك 🌹\nاختار الرسومات اللي عاجباك من هنا:\n${link}`;
+    openModal('رابط التصويت', `
+      <p>ابعت الرابط ده للعملاء، أو حطه في الحالة أو في جروب العملاء:</p>
+      <div class="link-box" dir="ltr">${esc(link)}</div>
+      <div class="form-actions"><button class="btn" id="sCopy">نسخ الرابط</button><button class="btn btn-wa" id="sWa">إرسال على واتساب</button></div>`);
+    $('#sCopy').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('تم نسخ الرابط'); } catch (e) { prompt('انسخ الرابط:', link); } };
+    $('#sWa').onclick = () => openWhatsApp(text);
+  }
+
+  document.addEventListener('click', e => {
+    const t = e.target;
+    const tab = t.closest('[data-tab]'); if (tab) { state.tab = tab.dataset.tab; draw(); return; }
+    const z = t.closest('[data-zoom]'); if (z) return zoom(z.dataset.zoom);
+    const m = t.closest('[data-menu]'); if (m) return menu(m.dataset.menu);
+    const p = t.closest('[data-pick]'); if (p) { api.updateDesign(p.dataset.pick, { status: 'active' }).then(() => toast('اتعلّمت إنها اتختارت ✓')); return; }
+    const w = t.closest('[data-who]');
+    if (w) {
+      const r = results().ranked.find(x => x.d.id === w.dataset.who);
+      openModal(`اللي اختاروا رسمة ${r.d.code}`, `<ul class="voter-list">${r.voters.map(v => `<li><b>${esc(v.name)}</b> <span dir="ltr" class="muted">${esc(v.phone || '')}</span></li>`).join('')}</ul>`);
+      return;
+    }
+    if (t.id === 'modalBackdrop' || t.closest('#modalClose')) closeModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  let started = false;
+  async function handleUser(user) {
+    if (!user) return showLogin();
+    const ok = await api.canManage(user).catch(() => false);
+    if (!ok) { await api.signOut(); return showLogin('الحساب ده مش مسموحله يدير الرسومات'); }
+    if (!started) { started = true; shell(); }
+  }
+
+  async function start() {
+    const cfg = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey ? window.FIREBASE_CONFIG : null;
+    try { api = cfg ? await firebaseApi(cfg) : localApi(); }
+    catch (e) { $('#app').innerHTML = '<div class="empty"><p>مقدرناش نتصل بالإنترنت. افتح الصفحة تاني.</p></div>'; return; }
+    if (!api.needsLogin) return shell();
+    api.onAuth(user => { if (!api.signingUp) handleUser(user); });
+  }
+  start();
+})();
+
+</script>
+</body>
+</html>
