@@ -246,19 +246,35 @@
   async function upload(files) {
     const imgs = files.filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
     if (!imgs.length) return;
-    let done = 0, failed = 0;
+    let done = 0, failed = 0, reason = '';
     toast(`جاري رفع ${imgs.length} صورة...`);
     for (const f of imgs) {
+      let stage = 'image';
       try {
         const photo = await compressImage(f);
+        stage = 'save';
         let code = f.name.replace(/\.[^.]+$/, '').trim() || String(state.designs.length + 1);
         if (state.designs.some(d => d.code === code)) code = `${code}-${done + 1}`;
         await api.addDesign({ id: uid(), code, status: 'sample', createdAt: Date.now() }, photo);
         done++;
         if (done % 5 === 0) toast(`اترفع ${done} من ${imgs.length}`);
-      } catch (e) { failed++; }
+      } catch (e) {
+        failed++;
+        console.error(e);
+        const code = String(e && e.code || '');
+        reason = stage === 'image' ? 'الصورة دي مش مدعومة — جرب صورة JPG أو PNG'
+          : code.includes('permission-denied') ? 'Firebase رافض الرفع: لازم تحط قواعد الحماية الجديدة في Firestore ← Rules وتدوس Publish'
+          : code.includes('not-found') || code.includes('failed-precondition') ? 'قاعدة البيانات لسه متعملتش في Firebase (Firestore ← Create database)'
+          : code.includes('unavailable') ? 'مفيش اتصال كويس بالإنترنت، جرب تاني'
+          : code.includes('invalid-argument') || code.includes('resource-exhausted') ? 'الصورة كبيرة زيادة عن اللزوم'
+          : `حصلت مشكلة (${code || (e && e.message) || 'غير معروفة'})`;
+        if (failed === 1 && done === 0 && stage === 'save') break; // نفس المشكلة هتتكرر مع كل الصور
+      }
     }
-    toast(`تم رفع ${done} رسمة${failed ? ` — ${failed} مااترفعتش` : ''}`, failed ? 'error' : 'ok');
+    if (failed) {
+      openModal('الرفع مكملش', `<p>اترفع <b>${done}</b> رسمة، و<b>${failed}</b> مااترفعتش.</p><p class="credit-msg">${esc(reason)}</p><div class="form-actions"><button class="btn" id="okErr">تمام</button></div>`);
+      $('#okErr').onclick = closeModal;
+    } else toast(`تم رفع ${done} رسمة ✓`);
   }
 
   async function zoom(id) {
