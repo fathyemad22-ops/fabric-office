@@ -5,6 +5,7 @@ const EXPENSE_CATS = ['إيجار', 'مرتبات', 'كهرباء ومياه', '
 
 const routes = {
   dashboard: { title: 'الرئيسية', render: v => renderDashboard(v), allow: () => true },
+  designs: { title: 'الرسومات والتصويت', render: v => renderDesigns(v), allow: () => can('stock') || can('reports') },
   fabrics: { title: 'الأقمشة والتوبات', render: v => renderFabrics(v), allow: () => true },
   sales: { title: 'فواتير البيع', render: () => renderInvoices('sale'), allow: () => true },
   purchases: { title: 'فواتير الشراء', render: () => renderInvoices('purchase'), allow: () => can('purchases') },
@@ -206,6 +207,7 @@ async function onSignedIn(user) {
   hideLogin();
   updateUserBar();
   await Backend.subscribe();
+  Backend.publishPublicInfo();
   render();
 }
 

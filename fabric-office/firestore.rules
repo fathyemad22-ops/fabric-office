@@ -91,6 +91,30 @@ service cloud.firestore {
       allow create: if can('stock');
       allow update, delete: if isOwner();
     }
+    // الرسومات وصورها: أي حد يقدر يشوفها (لصفحة التصويت)
+    match /designs/{id} {
+      allow read: if true;
+      allow write: if can('stock');
+    }
+    match /designPhotos/{id} {
+      allow read: if true;
+      allow write: if can('stock');
+    }
+    // أصوات العملاء: أي حد يقدر يبعت صوت، والسيستم بس هو اللي يقرأ
+    match /votes/{id} {
+      allow read: if active();
+      allow delete: if isOwner();
+      allow update: if false;
+      allow create: if request.resource.data.keys().hasOnly(['name', 'phone', 'designIds', 'createdAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+        && request.resource.data.phone is string && request.resource.data.phone.size() <= 30
+        && request.resource.data.designIds is list && request.resource.data.designIds.size() > 0 && request.resource.data.designIds.size() <= 30
+        && request.resource.data.createdAt is number;
+    }
+    match /meta/public {
+      allow read: if true;
+      allow write: if isOwner();
+    }
     match /expenses/{id} {
       allow read: if active();
       allow create: if can('expenses');

@@ -218,7 +218,7 @@ function renderSettings(view) {
     e.preventDefault();
     const d = formData(e.target);
     Object.assign(db.settings, { shopName: d.shopName.trim() || 'مكتب القماش', phone: d.phone.trim(), address: d.address.trim(), currency: d.currency.trim() || 'ج.م', invoiceNote: d.invoiceNote.trim() });
-    saveDB(); toast('تم حفظ البيانات'); render();
+    saveDB(); Backend.publishPublicInfo(); toast('تم حفظ البيانات'); render();
   };
 
   if (online) {

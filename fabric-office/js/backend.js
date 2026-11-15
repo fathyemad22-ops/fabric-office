@@ -114,6 +114,36 @@ const Backend = {
 
   async updateUser(id, data) { await this.fs.collection('users').doc(id).update(data); },
 
+  /* ---------- صور الرسومات (منفصلة عشان متتحملش مع كل فتحة للسيستم) ---------- */
+  photoCache: new Map(),
+  async savePhoto(id, data) {
+    this.photoCache.set(id, data);
+    if (this.mode === 'local') { localStorage.setItem('fabricOffice.photo.' + id, data); return; }
+    await this.fs.collection('designPhotos').doc(id).set({ data });
+  },
+  async getPhoto(id) {
+    if (this.photoCache.has(id)) return this.photoCache.get(id);
+    let data = '';
+    if (this.mode === 'local') data = localStorage.getItem('fabricOffice.photo.' + id) || '';
+    else { const snap = await this.fs.collection('designPhotos').doc(id).get(); data = snap.exists ? snap.data().data : ''; }
+    this.photoCache.set(id, data);
+    return data;
+  },
+  async deletePhoto(id) {
+    this.photoCache.delete(id);
+    if (this.mode === 'local') { localStorage.removeItem('fabricOffice.photo.' + id); return; }
+    await this.fs.collection('designPhotos').doc(id).delete();
+  },
+  // بيانات عامة بتظهر في صفحة التصويت (اسم المكتب بس)
+  publishPublicInfo() {
+    if (this.mode !== 'firebase' || !isOwner()) return;
+    const info = { shopName: db.settings.shopName || '', phone: db.settings.phone || '' };
+    const s = stableStr(info);
+    if (this.synced.meta_public === s) return;
+    this.synced.meta_public = s;
+    this.fs.doc('meta/public').set(info).catch(() => {});
+  },
+
   async sendReset(email) { await this.auth.sendPasswordResetEmail(email); },
 
   /* ---------- مزامنة البيانات ---------- */

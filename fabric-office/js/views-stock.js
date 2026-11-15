@@ -102,7 +102,7 @@ function openDesignForm(preset = {}) {
         ${preset.addColorsOnly ? '' : `
         <label class="field"><span>الخامة <b class="req">*</b></span><input name="name" list="matList" required placeholder="مثلاً: فورتي"></label>
         <datalist id="matList">${materials.map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-        ${field('الرسمة (رقم أو كود)', 'code', '', { attrs: 'placeholder="مثلاً: A2"' })}
+        ${field('الرسمة (رقم أو كود)', 'code', preset.code || '', { attrs: 'placeholder="مثلاً: A2"' })}
         ${field('سعر المتر (بيع)', 'price', '', { type: 'number', required: true, attrs: 'step="any" min="0"' })}
         ${can('reports') ? field('سعر المتر (شراء)', 'cost', '', { type: 'number', attrs: 'step="any" min="0"' }) : ''}
         ${field('نبهني لما التوبات تقل عن', 'minBolts', 3, { type: 'number', attrs: 'step="1" min="0"' })}

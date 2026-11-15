@@ -1,5 +1,5 @@
 /* ========== البيانات ومنطق العمل ========== */
-const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses', 'adjustments', 'returns', 'transfers', 'closings', 'stocktakes'];
+const COLLECTIONS = ['fabrics', 'bolts', 'customers', 'suppliers', 'sales', 'purchases', 'payments', 'expenses', 'adjustments', 'returns', 'transfers', 'closings', 'stocktakes', 'designs', 'votes'];
 const LOCAL_KEY = 'fabricOffice.v2';
 const LEGACY_KEY = 'fabricOffice.v1';
 
