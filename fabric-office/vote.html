@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>اختار الرسومات اللي عاجباك</title>
+  <meta name="description" content="رسومات قماش جديدة — اختار اللي عاجبك">
+  <meta property="og:title" content="رسومات جديدة — اختار اللي عاجبك 🌹">
+  <meta property="og:image" content="icon-512.png">
+  <meta name="theme-color" content="#7a2e4a">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { padding-bottom: 96px; }
+    .v-head { background: #2a1f24; color: #fff; padding: 20px 16px 24px; text-align: center; }
+    .v-head h1 { font-size: 22px; margin: 6px 0; }
+    .v-head p { margin: 0; color: #d9ccd1; }
+    .v-wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .v-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .v-card { position: relative; background: #fff; border: 2px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: border-color .15s ease, transform .15s ease; -webkit-tap-highlight-color: transparent; }
+    .v-card.on { border-color: var(--primary); }
+    .v-card .design-photo { cursor: pointer; }
+    .v-heart { position: absolute; top: 8px; inset-inline-start: 8px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.92); border: 0; font-size: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.2); pointer-events: none; }
+    .v-card.on .v-heart { background: var(--primary); }
+    .v-zoom { position: absolute; top: 8px; inset-inline-end: 8px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; border: 0; font-size: 16px; cursor: zoom-in; }
+    .v-code { padding: 8px 10px; font-weight: 700; display: flex; justify-content: space-between; }
+    .v-bar { position: fixed; bottom: 0; inset-inline: 0; background: #fff; border-top: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 -4px 16px rgba(0,0,0,.06); z-index: 20; }
+    .v-bar .btn { flex: 1; min-height: 48px; font-size: 16px; }
+    .v-count { font-weight: 700; white-space: nowrap; }
+    .v-done { text-align: center; padding: 48px 16px; }
+    .v-done .big { font-size: 64px; }
+    .v-loading { text-align: center; padding: 48px; color: var(--muted); }
+    .zoom-full { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .zoom-full img { max-width: 100%; max-height: 90vh; border-radius: 8px; }
+    .zoom-full button { position: absolute; top: 16px; inset-inline-end: 16px; background: #fff; border: 0; border-radius: 50%; width: 44px; height: 44px; font-size: 20px; }
+  </style>
+</head>
+<body>
+  <header class="v-head">
+    <div style="font-size:36px">🧵</div>
+    <h1 id="shopName">رسومات جديدة</h1>
+    <p>دوس على الرسومات اللي عاجباك ❤️ وبعدين "إرسال اختياري"</p>
+  </header>
+  <main class="v-wrap" id="vMain"><p class="v-loading">جاري تحميل الرسومات...</p></main>
+  <div class="v-bar" id="vBar" hidden>
+    <span class="v-count" id="vCount">اخترت 0</span>
+    <button class="btn btn-primary" id="vSend" disabled>إرسال اختياري</button>
+  </div>
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head"><h2 id="modalTitle"></h2><button class="icon-btn" id="modalClose" aria-label="إغلاق">✕</button></div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="js/config.js"></script>
+  <script src="js/vote.js"></script>
+</body>
+</html>

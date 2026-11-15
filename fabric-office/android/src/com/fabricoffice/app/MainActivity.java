@@ -107,7 +107,10 @@ public class MainActivity extends Activity {
                 fileCallback = callback;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
+                String[] types = params.getAcceptTypes();
+                boolean images = types != null && types.length > 0 && types[0] != null && types[0].startsWith("image");
+                i.setType(images ? "image/*" : "*/*");
+                if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try {
                     startActivityForResult(Intent.createChooser(i, "اختار الملف"), REQ_PICK_FILE);
                 } catch (ActivityNotFoundException e) {
@@ -204,7 +207,17 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQ_PICK_FILE) {
             if (fileCallback != null) {
-                fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+                Uri[] result = null;
+                if (resultCode == RESULT_OK && data != null) {
+                    if (data.getClipData() != null) {
+                        int n = data.getClipData().getItemCount();
+                        result = new Uri[n];
+                        for (int k = 0; k < n; k++) result[k] = data.getClipData().getItemAt(k).getUri();
+                    } else if (data.getData() != null) {
+                        result = new Uri[] { data.getData() };
+                    }
+                }
+                fileCallback.onReceiveValue(result);
                 fileCallback = null;
             }
             return;
