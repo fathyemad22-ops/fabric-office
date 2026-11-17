@@ -477,6 +477,7 @@ body.auth-mode .sidebar, body.auth-mode .main { display: none; }
   .results-table td, .results-table th { padding: 8px 6px; }
   .design-thumb { width: 44px; height: 44px; }
 }
+.backup-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; background: #fdf0dc; border: 1px solid #f2d3a6; color: #6b4300; border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px; }
 
 </style>
   <style>
@@ -582,6 +583,8 @@ window.FIREBASE_CONFIG = {
     firebase.initializeApp(cfg);
     const fs = firebase.firestore();
     const auth = firebase.auth();
+    const emu = window.__FB_EMULATOR__; // للاختبار بس
+    if (emu) { fs.useEmulator(emu.host, emu.firestore); auth.useEmulator(`http://${emu.host}:${emu.auth}`); }
     const cache = new Map();
     const self = {
       needsLogin: true,

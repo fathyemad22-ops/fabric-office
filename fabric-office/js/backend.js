@@ -108,7 +108,12 @@ const Backend = {
   },
 
   async createEmployee({ name, login, password, perms }) {
-    const sec = firebase.apps.find(a => a.name === 'secondary') || firebase.initializeApp(this.cfg, 'secondary');
+    let sec = firebase.apps.find(a => a.name === 'secondary');
+    if (!sec) {
+      sec = firebase.initializeApp(this.cfg, 'secondary');
+      const emu = window.__FB_EMULATOR__; // للاختبار بس
+      if (emu) sec.auth().useEmulator(`http://${emu.host}:${emu.auth}`);
+    }
     const cred = await sec.auth().createUserWithEmailAndPassword(toEmail(login), password);
     const id = cred.user.uid;
     const email = cred.user.email;
