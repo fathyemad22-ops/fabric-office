@@ -178,11 +178,14 @@ function openReturnForm(kind) {
     e.target.closest('.bolt-chip').classList.toggle('on', e.target.checked);
     total();
   };
-  form.onsubmit = e => {
+  form.onsubmit = async e => {
     e.preventDefault();
     if (!form.party.value) return toast('اختار الاسم', 'error');
     if (!chosen.size) return toast('اختار التوبات اللي راجعة', 'error');
-    const err = saveReturn({ kind, partyId: form.party.value, date: form.date.value, boltIds: [...chosen], refund: form.refund.value, refundAccount: form.refundAccount.value, note: form.note.value.trim() });
+    let reserved;
+    try { reserved = await Backend.reserve('return', uid(), [], true); }
+    catch (er) { return toast('مقدرتش أحفظ — اتأكد من النت وجرب تاني', 'error'); }
+    const err = saveReturn({ kind, partyId: form.party.value, date: form.date.value, boltIds: [...chosen], refund: form.refund.value, refundAccount: form.refundAccount.value, note: form.note.value.trim() }, { no: reserved.no });
     if (err) return toast(err, 'error');
     closeModal(); toast('تم حفظ المرتجع'); render();
   };

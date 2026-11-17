@@ -146,7 +146,7 @@ function returnableBolts(kind, partyId) {
   return out;
 }
 
-function saveReturn(data) {
+function saveReturn(data, opts = {}) {
   const items = returnableBolts(data.kind, data.partyId).filter(x => data.boltIds.includes(x.bolt.id));
   if (!items.length) return 'اختار التوبات اللي راجعة';
   const byFabric = {};
@@ -165,8 +165,9 @@ function saveReturn(data) {
     if (data.kind === 'sale') { x.bolt.status = 'in'; x.bolt.saleId = ''; x.bolt.returnedAt = data.date; }
     else { x.bolt.status = 'returned'; x.bolt.returnId = rid; }
   });
-  db.counters.return = (db.counters.return || 0) + 1;
-  db.returns.push({ id: rid, no: db.counters.return, kind: data.kind, partyId: data.partyId, date: data.date, lines, total, refund,
+  const no = opts.no || nextNo('return');
+  db.counters.return = Math.max(db.counters.return || 0, no);
+  db.returns.push({ id: rid, no, kind: data.kind, partyId: data.partyId, date: data.date, lines, total, refund,
     refundAccount: data.refundAccount || 'cash', note: data.note, createdBy: currentUser.name, createdAt: Date.now() });
   saveDB();
   return null;

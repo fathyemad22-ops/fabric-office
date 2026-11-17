@@ -63,8 +63,12 @@ const Backend = {
     await loadScript(base + 'firebase-firestore-compat.js');
     firebase.initializeApp(this.cfg);
     this.fs = firebase.firestore();
-    try { await this.fs.enablePersistence({ synchronizeTabs: true }); } catch (e) { /* متصفح لا يدعم الحفظ أوفلاين */ }
+    // للاختبار بس: لو الصفحة متشغلة على نسخة Firebase محلية (emulator)
+    const emu = window.__FB_EMULATOR__;
+    if (emu) this.fs.useEmulator(emu.host, emu.firestore);
+    else { try { await this.fs.enablePersistence({ synchronizeTabs: true }); } catch (e) { /* متصفح لا يدعم الحفظ أوفلاين */ } }
     this.auth = firebase.auth();
+    if (emu) this.auth.useEmulator(`http://${emu.host}:${emu.auth}`);
     this.mode = 'firebase';
     return 'firebase';
   },
@@ -113,6 +117,42 @@ const Backend = {
   },
 
   async updateUser(id, data) { await this.fs.collection('users').doc(id).update(data); },
+
+  /* ---------- حجز رقم الفاتورة والتوبات (عشان جهازين ميعملوش نفس الحاجة في نفس اللحظة) ----------
+     kind: sale | purchase | return. boltIds: التوبات اللي هتتباع (للبيع بس). isNew: فاتورة جديدة محتاجة رقم.
+     بيرجع { no } أو بيرمي error.code = 'bolt-taken' ومعاه error.boltNo */
+  async reserve(kind, docId, boltIds = [], isNew = true) {
+    if (this.mode !== 'firebase') return { no: isNew ? nextNo(kind) : null };
+    const fs = this.fs;
+    const cRef = fs.doc('meta/counters');
+    const refs = boltIds.map(id => fs.collection('bolts').doc(id));
+    const localMax = nextNo(kind) - 1;
+    const res = await fs.runTransaction(async tx => {
+      const cSnap = isNew ? await tx.get(cRef) : null;
+      const snaps = [];
+      for (const r of refs) snaps.push(await tx.get(r));
+      snaps.forEach(s => {
+        const d = s.exists ? s.data() : null;
+        if (!d || (d.status !== 'in' && d.saleId !== docId)) {
+          const e = new Error('bolt-taken'); e.code = 'bolt-taken'; e.boltNo = d ? d.no : '?'; throw e;
+        }
+      });
+      let no = null;
+      if (isNew) {
+        no = Math.max(num(cSnap.exists ? cSnap.data()[kind] : 0), localMax) + 1;
+        tx.set(cRef, { [kind]: no }, { merge: true });
+      }
+      refs.forEach(r => tx.update(r, { status: 'sold', saleId: docId }));
+      return { no };
+    });
+    // نحدّث النسخة المحلية عشان persist ميكتبش فوق اللي اتحجز
+    boltIds.forEach(id => {
+      const b = byId(db.bolts, id); if (b) { b.status = 'sold'; b.saleId = docId; }
+      const m = this.synced.bolts; if (m && b) m[id] = stableStr(b);
+    });
+    if (res.no) db.counters[kind] = Math.max(num(db.counters[kind]), res.no);
+    return res;
+  },
 
   /* ---------- صور الرسومات (منفصلة عشان متتحملش مع كل فتحة للسيستم) ---------- */
   photoCache: new Map(),
@@ -206,7 +246,8 @@ const Backend = {
       Object.keys(prev).forEach(id => { if (!(id in now)) ops.push(['delete', this.fs.collection(col).doc(id)]); });
       this.synced[col] = now;
     });
-    ['settings', 'counters'].forEach(key => {
+    // العدادات أونلاين بتتكتب من reserve بس (عشان جهاز ميرجّعش رقم أقدم فوق رقم أحدث)
+    ['settings'].forEach(key => {
       const s = stableStr(db[key]);
       if (this.synced['meta_' + key] !== s) {
         this.synced['meta_' + key] = s;

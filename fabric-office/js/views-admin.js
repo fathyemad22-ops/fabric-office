@@ -125,6 +125,23 @@ function renderReports(view) {
 /* =====================================================
    الإعدادات
    ===================================================== */
+// تحميل نسخة احتياطية، وتسجيل ميعادها عشان التذكير الأسبوعي
+function exportBackup() {
+  const name = `fabric-office-backup-${todayISO()}.json`;
+  const json = JSON.stringify(db, null, 2);
+  db.settings.lastBackupAt = Date.now();
+  saveDB();
+  if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(name, json); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('تم تحميل النسخة الاحتياطية');
+  if (currentRoute() === 'dashboard') render();
+}
+
+const daysSinceBackup = () => (db.settings.lastBackupAt ? Math.floor((Date.now() - db.settings.lastBackupAt) / 86400000) : null);
 function renderSettings(view) {
   const s = db.settings;
   const online = Backend.isOnline();
@@ -240,16 +257,7 @@ function renderSettings(view) {
     };
   }
 
-  $('#exportBtn').onclick = () => {
-    if (window.AndroidBridge && AndroidBridge.saveFile) { AndroidBridge.saveFile(`fabric-office-backup-${todayISO()}.json`, JSON.stringify(db, null, 2)); return; }
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `fabric-office-backup-${todayISO()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('تم تحميل النسخة الاحتياطية');
-  };
+  $('#exportBtn').onclick = exportBackup;
   $('#importFile').onchange = async e => {
     const file = e.target.files[0]; if (!file) return;
     try {

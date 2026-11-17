@@ -112,11 +112,38 @@ function addOpeningBolts(fabricId, rows) {
   return null;
 }
 
+/* ---------- أرقام الفواتير ---------- */
+const NUMBERED = { sale: 'sales', purchase: 'purchases', return: 'returns' };
+// الرقم الجاي = أكبر من العداد ومن أكبر رقم موجود فعلاً (عشان مفيش رقمين زي بعض)
+function nextNo(kind) {
+  const maxUsed = db[NUMBERED[kind]].reduce((a, x) => Math.max(a, num(x.no)), 0);
+  return Math.max(num(db.counters[kind]), maxUsed) + 1;
+}
+
+// فحص فاتورة البيع من غير ما نغيّر حاجة (قبل ما نحجز على السيرفر)
+function checkSale(data, existingId) {
+  const old = existingId ? byId(db.sales, existingId) : null;
+  const seen = new Set();
+  for (const l of data.lines) {
+    const f = byId(db.fabrics, l.fabricId);
+    if (!f) return 'صنف غير موجود';
+    for (const bid of l.boltIds) {
+      const b = byId(db.bolts, bid);
+      if (!b) return 'فيه توب مش موجود في المخزن';
+      if (seen.has(bid)) return `التوب رقم ${b.no} مكرر في الفاتورة`;
+      if (b.status !== 'in' && !(old && b.saleId === old.id)) return `التوب رقم ${b.no} من "${f.name}" اتباع قبل كده`;
+      seen.add(bid);
+    }
+  }
+  return null;
+}
+
 /* ---------- فواتير البيع ---------- */
 // data.lines: [{fabricId, price, boltIds:[...]}]
-function saveSale(data, existingId) {
+// opts: { saleId, no } — بييجوا من Backend.reserve عشان الرقم والتوبات يتحجزوا على السيرفر الأول
+function saveSale(data, existingId, opts = {}) {
   const old = existingId ? byId(db.sales, existingId) : null;
-  const saleId = old ? old.id : uid();
+  const saleId = old ? old.id : (opts.saleId || uid());
   const seen = new Set();
   const lines = [];
   for (const l of data.lines) {
@@ -141,8 +168,9 @@ function saveSale(data, existingId) {
   if (rec.paid > rec.total) rec.paid = rec.total;
   if (old) Object.assign(old, rec);
   else {
-    db.counters.sale = (db.counters.sale || 0) + 1;
-    db.sales.push(Object.assign({ id: saleId, no: db.counters.sale, createdAt: Date.now(), createdBy: currentUser.name }, rec));
+    const no = opts.no || nextNo('sale');
+    db.counters.sale = Math.max(db.counters.sale || 0, no);
+    db.sales.push(Object.assign({ id: saleId, no, createdAt: Date.now(), createdBy: currentUser.name }, rec));
   }
   saveDB();
   return null;
@@ -154,7 +182,7 @@ function purchaseHasSoldBolts(id) {
   return db.bolts.some(b => b.purchaseId === id && b.status !== 'in');
 }
 
-function savePurchase(data, existingId) {
+function savePurchase(data, existingId, opts = {}) {
   const old = existingId ? byId(db.purchases, existingId) : null;
   if (old && purchaseHasSoldBolts(old.id)) return 'مينفعش تعدل فاتورة شراء اتباع منها توبات';
   const pid = old ? old.id : uid();
@@ -197,8 +225,9 @@ function savePurchase(data, existingId) {
   if (rec.paid > rec.total) rec.paid = rec.total;
   if (old) Object.assign(old, rec);
   else {
-    db.counters.purchase = (db.counters.purchase || 0) + 1;
-    db.purchases.push(Object.assign({ id: pid, no: db.counters.purchase, createdAt: Date.now(), createdBy: currentUser.name }, rec));
+    const no = opts.no || nextNo('purchase');
+    db.counters.purchase = Math.max(db.counters.purchase || 0, no);
+    db.purchases.push(Object.assign({ id: pid, no, createdAt: Date.now(), createdBy: currentUser.name }, rec));
   }
   saveDB();
   return null;

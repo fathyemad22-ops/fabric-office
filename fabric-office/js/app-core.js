@@ -96,7 +96,11 @@ function renderDashboard(view) {
   const recent = [...db.sales].sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no).slice(0, 6);
   const debtors = db.customers.map(c => ({ c, b: customerBalance(c.id) })).filter(x => x.b > 0).sort((a, b) => b.b - a.b).slice(0, 6);
 
+  const bDays = daysSinceBackup();
+  const needBackup = isOwner() && (db.sales.length || db.fabrics.length) && (bDays === null || bDays >= 7);
   view.innerHTML = `
+    ${needBackup ? `<div class="backup-banner"><span>💾 ${bDays === null ? 'لسه معملتش نسخة احتياطية من بياناتك' : `آخر نسخة احتياطية من ${bDays} يوم`} — احتفظ بنسخة كل أسبوع احتياطي.</span>
+      <button class="btn btn-sm btn-primary" id="backupNow">تحميل نسخة دلوقتي</button></div>` : ''}
     <div class="stats">
       ${statCard('مبيعات اليوم', `${money(todaySales.reduce((a, s) => a + s.total, 0))}<small>${boltsSoldToday} توب</small>`)}
       ${statCard('مبيعات الشهر', money(monthSales.reduce((a, s) => a + s.total, 0)))}
@@ -128,6 +132,7 @@ function renderDashboard(view) {
         </tbody></table>` : emptyState('مفيش مديونيات على العملاء')}
       </section>
     </div>`;
+  if ($('#backupNow')) $('#backupNow').onclick = exportBackup;
   const lt = $('[data-latetab]', view);
   if (lt) lt.onclick = () => { ledgerState.tab = 'late'; };
 }

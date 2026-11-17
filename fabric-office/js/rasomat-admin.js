@@ -54,6 +54,8 @@
     firebase.initializeApp(cfg);
     const fs = firebase.firestore();
     const auth = firebase.auth();
+    const emu = window.__FB_EMULATOR__; // للاختبار بس
+    if (emu) { fs.useEmulator(emu.host, emu.firestore); auth.useEmulator(`http://${emu.host}:${emu.auth}`); }
     const cache = new Map();
     const self = {
       needsLogin: true,

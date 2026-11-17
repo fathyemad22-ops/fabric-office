@@ -350,7 +350,7 @@ function openSaleForm(id) {
   };
   draw();
 
-  form.onsubmit = e => {
+  form.onsubmit = async e => {
     e.preventDefault();
     const after = e.submitter && e.submitter.dataset.after;
     const used = lines.filter(l => l.fabricId || l.boltIds.length);
@@ -367,9 +367,24 @@ function openSaleForm(id) {
     if (err0) return toast(err0, 'error');
     const cv = creditViolation(form.party.value, total, paid, id);
     if (cv && !($('#creditOverride') && $('#creditOverride').checked)) return toast(cv, 'error');
-    const err = saveSale({ customerId: form.party.value, date: form.date.value, discount: disc, paid, paidAccount: form.paidAccount.value, note: form.note.value.trim(),
-      lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, boltIds: [...l.boltIds] })) }, id);
-    if (err) return toast(err, 'error');
+    const saleData = { customerId: form.party.value, date: form.date.value, discount: disc, paid, paidAccount: form.paidAccount.value, note: form.note.value.trim(),
+      lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, boltIds: [...l.boltIds] })) };
+    const err1 = checkSale(saleData, id);
+    if (err1) return toast(err1, 'error');
+    // نحجز الرقم والتوبات الجديدة على السيرفر الأول
+    const docId = id || uid();
+    const already = new Set(inv ? inv.lines.flatMap(l => (l.bolts || []).map(b => b.boltId)) : []);
+    const newBolts = saleData.lines.flatMap(l => l.boltIds).filter(b => !already.has(b));
+    const btns = $$('button[type=submit]', form); btns.forEach(b => { b.disabled = true; });
+    let reserved;
+    try { reserved = await Backend.reserve('sale', docId, newBolts, !id); }
+    catch (er) {
+      btns.forEach(b => { b.disabled = false; });
+      if (er.code === 'bolt-taken') { toast(`التوب رقم ${er.boltNo} لسه اتباع من جهاز تاني — اختار توب غيره`, 'error'); draw(); return; }
+      return toast('مقدرتش أحفظ — اتأكد من النت وجرب تاني', 'error');
+    }
+    const err = saveSale(saleData, id, { saleId: docId, no: reserved.no });
+    if (err) { btns.forEach(b => { b.disabled = false; }); return toast(err, 'error'); }
     closeModal();
     toast(id ? 'تم حفظ التعديلات' : 'تم حفظ الفاتورة');
     render();
@@ -531,7 +546,7 @@ function openPurchaseForm(id) {
   form.transport.oninput = updateTotals;
   draw();
 
-  form.onsubmit = e => {
+  form.onsubmit = async e => {
     e.preventDefault();
     const after = e.submitter && e.submitter.dataset.after;
     if (!form.party.value) return toast('اختر المورد', 'error');
@@ -547,9 +562,14 @@ function openPurchaseForm(id) {
     const { disc, total, paid } = readTotals(form, sub());
     const err0 = validateTotals(disc, total, paid);
     if (err0) return toast(err0, 'error');
+    let reserved = { no: null };
+    if (!id) {
+      try { reserved = await Backend.reserve('purchase', uid(), [], true); }
+      catch (er) { return toast('مقدرتش أحفظ — اتأكد من النت وجرب تاني', 'error'); }
+    }
     const err = savePurchase({ supplierId: form.party.value, date: form.date.value, discount: disc, paid, paidAccount: form.paidAccount.value,
       transport: form.transport.value, transportAccount: form.transportAccount.value, note: form.note.value.trim(),
-      lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, bolts: l.bolts })) }, id);
+      lines: used.map(l => ({ fabricId: l.fabricId, price: l.price, bolts: l.bolts })) }, id, { no: reserved.no });
     if (err) return toast(err, 'error');
     closeModal();
     toast(id ? 'تم حفظ التعديلات' : 'تم حفظ الفاتورة والتوبات اتضافت للمخزن');

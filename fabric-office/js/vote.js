@@ -25,6 +25,7 @@
     await loadScript(base + 'firebase-firestore-compat.js');
     firebase.initializeApp(cfg);
     const fs = firebase.firestore();
+    if (window.__FB_EMULATOR__) fs.useEmulator(window.__FB_EMULATOR__.host, window.__FB_EMULATOR__.firestore);
     return {
       async info() { try { const s = await fs.doc('meta/public').get(); return s.exists ? s.data() : {}; } catch (e) { return {}; } },
       async designs() { const s = await fs.collection('designs').get(); return s.docs.map(d => Object.assign({ id: d.id }, d.data())); },
@@ -102,7 +103,8 @@
     $('#modalBody').innerHTML = `
       <form id="vForm" class="auth-form">
         <label class="field"><span>اسمك أو اسم المحل <b class="req">*</b></span><input name="name" required maxlength="80" value="${esc(saved.name || '')}"></label>
-        <label class="field"><span>رقم التليفون</span><input name="phone" type="tel" dir="ltr" maxlength="20" value="${esc(saved.phone || '')}" placeholder="01xxxxxxxxx"></label>
+        <label class="field"><span>رقم الواتساب <b class="req">*</b></span><input name="phone" type="tel" dir="ltr" maxlength="20" required inputmode="tel" value="${esc(saved.phone || '')}" placeholder="01xxxxxxxxx">
+          <small class="muted">عشان نبلغك أول ما الرسومات اللي اخترتها تنزل</small></label>
         <button class="btn btn-primary" type="submit">إرسال</button>
       </form>`;
     $('#modalBackdrop').hidden = false;
@@ -112,6 +114,8 @@
       const name = e.target.name.value.trim();
       const phone = e.target.phone.value.trim();
       if (!name) return toast('اكتب اسمك', 'error');
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length < 10 || digits.length > 15) return toast('اكتب رقم واتساب صحيح', 'error');
       const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'جاري الإرسال...';
       try {
         await api.vote({ name, phone, designIds: [...chosen], createdAt: Date.now() });
