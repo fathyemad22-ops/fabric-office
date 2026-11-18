@@ -73,14 +73,15 @@ function renderDashboard(view) {
   if (!db.fabrics.length && !db.customers.length) {
     view.innerHTML = `
       <div class="welcome card">
-        <h2>أهلاً بيك في نظام مكتب القماش 👋</h2>
-        <p>ابدأ بإضافة أصناف القماش وتوباتها (رقم وطول كل توب)، وبعدها العملاء والموردين. مع كل فاتورة بيع أو شراء المخزن والحسابات بيتحدثوا لوحدهم.</p>
-        <div class="row-actions">
-          ${can('stock') ? '<a class="btn btn-primary" href="#fabrics">إضافة أول صنف</a>' : ''}
-          ${isOwner() ? '<button class="btn" id="seedBtn">تجربة النظام ببيانات تجريبية</button>' : ''}
-        </div>
+        <h2>أهلاً بيك في ${esc(db.settings.shopName || 'نظام مكتب القماش')} 👋</h2>
+        <p>عشان تبدأ:</p>
+        <ol class="start-steps">
+          ${isOwner() ? '<li><a href="#settings">اكتب بيانات المكتب</a> (الاسم، التليفون، العنوان)، ودي بتظهر في الفواتير.</li>' : ''}
+          ${can('stock') ? '<li><a href="#fabrics">ضيف الرسومات وألوانها</a>، والتوبات اللي عندك في المخزن.</li>' : ''}
+          ${can('parties') ? '<li><a href="#customers">ضيف العملاء</a> و<a href="#suppliers">الموردين</a>.</li>' : ''}
+          ${isOwner() && Backend.isOnline() ? '<li>من <a href="#settings">الإعدادات</a> اعمل حسابات للموظفين.</li>' : ''}
+        </ol>
       </div>`;
-    if ($('#seedBtn')) $('#seedBtn').onclick = () => { seedDemo(); toast('تم تحميل بيانات تجريبية'); render(); };
     return;
   }
 

@@ -206,9 +206,8 @@ function renderSettings(view) {
       </div>
     </section>
     <section class="card">
-      <div class="card-head"><h3>أدوات</h3></div>
+      <div class="card-head"><h3>منطقة الخطر</h3></div>
       <div class="row-actions">
-        <button class="btn" id="demoBtn">تحميل بيانات تجريبية</button>
         <button class="btn btn-danger" id="wipeBtn">مسح كل البيانات</button>
       </div>
     </section>`;
@@ -271,15 +270,22 @@ function renderSettings(view) {
       toast('الملف ده مش نسخة احتياطية صحيحة', 'error');
     } finally { e.target.value = ''; }
   };
-  $('#demoBtn').onclick = async () => {
-    if (await confirmDialog('البيانات التجريبية هتستبدل كل البيانات الحالية. متأكد؟', 'تحميل')) { seedDemo(); toast('تم تحميل بيانات تجريبية'); location.hash = '#dashboard'; render(); }
-  };
-  $('#wipeBtn').onclick = async () => {
-    if (await confirmDialog('هيتم مسح كل البيانات نهائياً. يفضل تعمل نسخة احتياطية الأول. متأكد؟', 'مسح الكل')) {
+  $('#wipeBtn').onclick = () => {
+    openModal('مسح كل البيانات', `
+      <form id="wipeForm">
+        <p class="credit-msg">⚠️ هيتم مسح كل الأصناف والتوبات والعملاء والفواتير والحسابات نهائياً، ومش هتقدر ترجعها غير من نسخة احتياطية.</p>
+        <div class="row-actions"><button type="button" class="btn" id="wipeBackup">💾 تحميل نسخة احتياطية الأول</button></div>
+        <label class="field" style="margin-top:12px"><span>عشان تأكد، اكتب كلمة <b>مسح</b></span><input name="confirm" autocomplete="off"></label>
+        <div class="form-actions"><button class="btn btn-danger" type="submit">مسح كل البيانات</button><button class="btn" type="button" data-close>إلغاء</button></div>
+      </form>`);
+    $('#wipeBackup').onclick = exportBackup;
+    $('#wipeForm').onsubmit = e => {
+      e.preventDefault();
+      if (e.target.confirm.value.trim() !== 'مسح') return toast('اكتب كلمة "مسح" بالظبط عشان تأكد', 'error');
       const fresh = defaultData(); fresh.settings = db.settings;
       Object.keys(fresh).forEach(k => { db[k] = fresh[k]; });
-      saveDB(); toast('تم مسح البيانات'); location.hash = '#dashboard'; render();
-    }
+      saveDB(); closeModal(); toast('تم مسح البيانات'); location.hash = '#dashboard'; render();
+    };
   };
 }
 
