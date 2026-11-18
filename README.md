@@ -302,7 +302,7 @@ In this case:
 - State was managed using React’s `useState` hook, allowing dynamic product filtering and updates to the UI in response to user interaction.
 - Event handling through props enabled seamless communication between parent and child components, ensuring a fluid user experience.
 
----
+--- 
 
 ## Acknowledgments
 Thanks to [Gaza Sky Geeks](https://gazaskygeeks.com/). for the training and opportunity to enhance my skills.
