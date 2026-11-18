@@ -14,9 +14,9 @@ icon_uri = 'data:image/svg+xml;base64,' + base64.b64encode(icon.encode()).decode
 def build(src, script, out):
     html = (root / src).read_text(encoding='utf-8')
     js = (root / script).read_text(encoding='utf-8')
-    html = html.replace('<link rel="stylesheet" href="css/style.css">', '<style>\n' + css + '\n</style>')
-    html = html.replace('<script src="js/config.js"></script>', '<script>\n' + cfg + '\n</script>')
-    html = html.replace(f'<script src="{script}"></script>', '<script>\n' + js + '\n</script>')
+    html = re.sub(r'<link rel="stylesheet" href="css/style\.css(\?v=\d+)?">', lambda m: '<style>\n' + css + '\n</style>', html)
+    html = re.sub(r'<script src="js/config\.js(\?v=\d+)?"></script>', lambda m: '<script>\n' + cfg + '\n</script>', html)
+    html = re.sub(r'<script src="' + re.escape(script) + r'(\?v=\d+)?"></script>', lambda m: '<script>\n' + js + '\n</script>', html)
     html = html.replace('href="icon.svg"', f'href="{icon_uri}"')
     html = re.sub(r'\s*<meta property="og:image"[^>]*>', '', html)
     assert 'src="js/' not in html and 'href="css/' not in html, out
